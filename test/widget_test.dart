@@ -8,21 +8,37 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:second_brain/app.dart';
+import 'package:second_brain/features/notes/presentation/providers/notes_provider.dart';
 
 void main() {
-  testWidgets('App displays placeholder home screen', (WidgetTester tester) async {
+  testWidgets('App displays notes list screen', (WidgetTester tester) async {
+    // Initialize SharedPreferences for testing
+    SharedPreferences.setMockInitialValues({});
+    final sharedPreferences = await SharedPreferences.getInstance();
+    
     // Build our app and trigger a frame.
-    await tester.pumpWidget(const ProviderScope(child: App()));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(sharedPreferences),
+        ],
+        child: const App(),
+      ),
+    );
+
+    // Wait for the async providers to load
+    await tester.pumpAndSettle();
 
     // Verify that the app title is displayed
     expect(find.text('🧠 Second Brain'), findsOneWidget);
     
-    // Verify that welcome message is displayed
-    expect(find.text('Welcome to Second Brain'), findsOneWidget);
+    // Verify that search bar is displayed
+    expect(find.byType(TextField), findsWidgets);
     
-    // Verify that the brain icon is displayed
-    expect(find.byIcon(Icons.psychology), findsOneWidget);
+    // Verify that FAB is displayed
+    expect(find.byType(FloatingActionButton), findsOneWidget);
   });
 }
