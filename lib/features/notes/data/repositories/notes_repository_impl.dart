@@ -23,13 +23,15 @@ class NotesRepositoryImpl implements NotesRepository {
   Future<Note?> getNoteById(String id) async {
     try {
       final noteModels = await localDatasource.getNotes();
-      final noteModel = noteModels.firstWhere(
-        (note) => note.id == id,
-        orElse: () => throw Exception('Note not found'),
-      );
-      return noteModel.toEntity();
+      try {
+        final noteModel = noteModels.firstWhere((note) => note.id == id);
+        return noteModel.toEntity();
+      } catch (e) {
+        // Note not found
+        return null;
+      }
     } catch (e) {
-      return null;
+      throw Exception('Failed to get note: $e');
     }
   }
 

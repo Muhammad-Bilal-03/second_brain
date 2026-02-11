@@ -49,11 +49,12 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
   }
 
   Future<void> _deleteNote(Note note) async {
+    final noteTitle = note.title.isEmpty ? 'Untitled' : note.title;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Note'),
-        content: Text('Are you sure you want to delete "${note.title}"?'),
+        content: Text('Are you sure you want to delete "$noteTitle"?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),

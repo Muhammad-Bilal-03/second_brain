@@ -17,6 +17,8 @@ class Note {
   });
 
   /// Create a copy with some fields changed
+  /// Note: For nullable fields like color, passing null will retain the existing value.
+  /// To clear a nullable field, pass an explicit empty string or handle it separately.
   Note copyWith({
     String? id,
     String? title,

@@ -53,6 +53,9 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     final content = _contentController.text.trim();
 
     if (title.isEmpty && content.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cannot save an empty note')),
+      );
       return;
     }
 
