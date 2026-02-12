@@ -1,92 +1,74 @@
-import 'package:second_brain/features/notes/data/datasources/notes_local_datasource.dart';
-import 'package:second_brain/features/notes/data/models/note_model.dart';
-import 'package:second_brain/features/notes/domain/entities/note.dart';
-import 'package:second_brain/features/notes/domain/repositories/notes_repository.dart';
+import '../../domain/entities/note.dart';
+import '../services/vector_search_service.dart';
+import '../../domain/usecases/semantic_search_notes.dart';
+import '../../domain/repositories/notes_repository.dart';
 
-/// Implementation of NotesRepository using local datasource
 class NotesRepositoryImpl implements NotesRepository {
-  final NotesLocalDatasource localDatasource;
+  final List<Note> _notes = [];
 
-  const NotesRepositoryImpl(this.localDatasource);
-
-  @override
-  Future<List<Note>> getAllNotes() async {
-    try {
-      final noteModels = await localDatasource.getNotes();
-      return noteModels.map((model) => model.toEntity()).toList();
-    } catch (e) {
-      throw Exception('Failed to get notes: $e');
-    }
-  }
-
-  @override
-  Future<Note?> getNoteById(String id) async {
-    try {
-      final noteModels = await localDatasource.getNotes();
-      try {
-        final noteModel = noteModels.firstWhere((note) => note.id == id);
-        return noteModel.toEntity();
-      } catch (e) {
-        // Note not found
-        return null;
-      }
-    } catch (e) {
-      throw Exception('Failed to get note: $e');
-    }
-  }
+  final VectorSearchService _vectorSearchService = VectorSearchService();
 
   @override
   Future<void> createNote(Note note) async {
-    try {
-      final noteModels = await localDatasource.getNotes();
-      noteModels.add(NoteModel.fromEntity(note));
-      await localDatasource.saveNotes(noteModels);
-    } catch (e) {
-      throw Exception('Failed to create note: $e');
-    }
+    _notes.add(note);
+    upsertNoteEmbedding(note);
   }
+
+  @override
+  Future<Note?> getNoteById(String noteId) async {
+    for (final n in _notes) {
+      if (n.id == noteId) return n;
+    }
+    return null;
+  }
+
+  @override
+  Future<List<Note>> getAllNotes() async => _notes;
 
   @override
   Future<void> updateNote(Note note) async {
-    try {
-      final noteModels = await localDatasource.getNotes();
-      final index = noteModels.indexWhere((n) => n.id == note.id);
-      
-      if (index == -1) {
-        throw Exception('Note not found');
-      }
-      
-      noteModels[index] = NoteModel.fromEntity(note);
-      await localDatasource.saveNotes(noteModels);
-    } catch (e) {
-      throw Exception('Failed to update note: $e');
+    final idx = _notes.indexWhere((n) => n.id == note.id);
+    if (idx != -1) {
+      _notes[idx] = note;
+      upsertNoteEmbedding(note);
     }
   }
 
   @override
-  Future<void> deleteNote(String id) async {
-    try {
-      await localDatasource.deleteNote(id);
-    } catch (e) {
-      throw Exception('Failed to delete note: $e');
-    }
+  Future<void> deleteNote(String noteId) async {
+    _notes.removeWhere((n) => n.id == noteId);
+    removeNoteEmbedding(noteId);
   }
 
   @override
   Future<List<Note>> searchNotes(String query) async {
-    try {
-      final noteModels = await localDatasource.getNotes();
-      final lowerQuery = query.toLowerCase();
-      
-      final filteredModels = noteModels.where((note) {
-        final titleMatch = note.title.toLowerCase().contains(lowerQuery);
-        final contentMatch = note.content.toLowerCase().contains(lowerQuery);
-        return titleMatch || contentMatch;
-      }).toList();
-      
-      return filteredModels.map((model) => model.toEntity()).toList();
-    } catch (e) {
-      throw Exception('Failed to search notes: $e');
-    }
+    return _notes.where(
+            (n) => n.title.toLowerCase().contains(query.toLowerCase()) ||
+            n.content.toLowerCase().contains(query.toLowerCase())
+    ).toList();
+  }
+
+  @override
+  Future<List<Note>> semanticSearchNotes(String query, {int topN = 10}) async {
+    rebuildNoteEmbeddings(_notes);
+    final semanticUseCase = SemanticSearchNotes(
+      repository: this,
+      vectorService: _vectorSearchService,
+    );
+    return await semanticUseCase.call(query, topN: topN);
+  }
+
+  // Embedding helpers
+  void rebuildNoteEmbeddings(List<Note> notes) {
+    final noteTexts = { for (final n in notes) n.id: '${n.title} ${n.content}' };
+    _vectorSearchService.rebuildEmbeddings(noteTexts);
+  }
+
+  void upsertNoteEmbedding(Note note) {
+    _vectorSearchService.upsertEmbedding(note.id, '${note.title} ${note.content}');
+  }
+
+  void removeNoteEmbedding(String id) {
+    _vectorSearchService.removeEmbedding(id);
   }
 }
