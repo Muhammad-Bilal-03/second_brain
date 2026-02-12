@@ -38,13 +38,13 @@ class NoteCard extends StatelessWidget {
         child: Container(
           decoration: accentColor != null
               ? BoxDecoration(
-                  border: Border(
-                    left: BorderSide(
-                      color: accentColor,
-                      width: 4,
-                    ),
-                  ),
-                )
+            border: Border(
+              left: BorderSide(
+                color: accentColor,
+                width: 4,
+              ),
+            ),
+          )
               : null,
           child: Padding(
             padding: const EdgeInsets.all(16.0),
@@ -61,7 +61,7 @@ class NoteCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 8),
-                
+
                 // Content preview
                 if (note.content.isNotEmpty) ...[
                   Text(
@@ -72,12 +72,12 @@ class NoteCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 12),
                 ],
-                
+
                 // Time ago
                 Text(
                   note.updatedAt.timeAgo,
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurface.withOpacity(0.6),
+                    color: colorScheme.onSurface.withValues(alpha: 0.6),
                   ),
                 ),
               ],

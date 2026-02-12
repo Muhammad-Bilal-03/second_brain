@@ -16,7 +16,7 @@ class EmptyNotesWidget extends StatelessWidget {
           Icon(
             Icons.auto_stories_outlined,
             size: 100,
-            color: colorScheme.primary.withOpacity(0.5),
+            color: colorScheme.primary.withValues(alpha: 0.5),
           ),
           const SizedBox(height: 24),
           Text(
@@ -30,7 +30,7 @@ class EmptyNotesWidget extends StatelessWidget {
           Text(
             'Tap + to create your first note',
             style: theme.textTheme.bodyLarge?.copyWith(
-              color: colorScheme.onSurface.withOpacity(0.6),
+              color: colorScheme.onSurface.withValues(alpha: 0.6),
             ),
           ),
         ],

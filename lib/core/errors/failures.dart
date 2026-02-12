@@ -1,24 +1,24 @@
 /// Base class for all failures in the application
 abstract class Failure {
   final String message;
-  
+
   const Failure(this.message);
-  
+
   @override
   String toString() => message;
 }
 
 /// Failure when server communication fails
 class ServerFailure extends Failure {
-  const ServerFailure([String message = 'Server error occurred']) : super(message);
+  const ServerFailure([super.message = 'Server error occurred']);
 }
 
 /// Failure when cache operations fail
 class CacheFailure extends Failure {
-  const CacheFailure([String message = 'Cache error occurred']) : super(message);
+  const CacheFailure([super.message = 'Cache error occurred']);
 }
 
 /// General failure for unexpected errors
 class GeneralFailure extends Failure {
-  const GeneralFailure([String message = 'An unexpected error occurred']) : super(message);
+  const GeneralFailure([super.message = 'An unexpected error occurred']);
 }
