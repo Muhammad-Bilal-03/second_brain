@@ -10,11 +10,12 @@ class EmbeddingUtils {
 
     final apiKey = dotenv.env['GEMINI_API_KEY'];
     if (apiKey == null || apiKey.isEmpty) {
-      throw Exception('GEMINI_API_KEY not found in .env file');
+      print('🔴 FATAL: GEMINI_API_KEY is missing in .env!');
+      throw Exception('GEMINI_API_KEY not found');
     }
 
     _model = GenerativeModel(
-      model: 'text-embedding-004',
+      model: 'gemini-embedding-001',
       apiKey: apiKey,
     );
     return _model!;
@@ -27,9 +28,12 @@ class EmbeddingUtils {
       final model = _getModel();
       final content = Content.text(text);
       final result = await model.embedContent(content);
+
+      print('🟢 AI Success: Generated vector for "${text.substring(0, min(20, text.length))}..."');
       return result.embedding.values;
     } catch (e) {
-      // FIX: Removed print(e) for production readiness
+      // THIS IS THE IMPORTANT PART:
+      print('🔴 AI ERROR: Could not generate embedding. Reason: $e');
       return [];
     }
   }

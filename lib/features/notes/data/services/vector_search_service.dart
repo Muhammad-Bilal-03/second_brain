@@ -42,7 +42,7 @@ class VectorSearchService {
         .map((e) => MapEntry(
         e.key,
         EmbeddingUtils.cosineSimilarity(e.value, queryVec)))
-        .where((e) => e.value > 0)
+        .where((e) => e.value > 0.65)
         .toList();
 
     scored.sort((a, b) => b.value.compareTo(a.value));

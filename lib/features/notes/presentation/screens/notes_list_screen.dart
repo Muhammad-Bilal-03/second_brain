@@ -1,3 +1,4 @@
+import 'dart:async'; // <--- Import this
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -7,7 +8,6 @@ import 'package:second_brain/features/notes/presentation/screens/note_editor_scr
 import 'package:second_brain/features/notes/presentation/widgets/empty_notes_widget.dart';
 import 'package:second_brain/features/notes/presentation/widgets/note_card.dart';
 
-/// Main screen displaying list of notes
 class NotesListScreen extends ConsumerStatefulWidget {
   const NotesListScreen({super.key});
 
@@ -17,24 +17,31 @@ class NotesListScreen extends ConsumerStatefulWidget {
 
 class _NotesListScreenState extends ConsumerState<NotesListScreen> {
   final TextEditingController _searchController = TextEditingController();
+  Timer? _debounce; // <--- 1. Add Timer variable
 
   @override
   void dispose() {
+    _debounce?.cancel(); // <--- 2. Cancel timer to prevent memory leaks
     _searchController.dispose();
     super.dispose();
   }
 
+  // <--- 3. Updated Search Logic
   void _onSearchChanged(String query) {
-    ref
-        .read(searchQueryProvider.notifier)
-        .state = query;
+    // If the user types again before 500ms, cancel the previous timer
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+
+    // Start a new timer
+    _debounce = Timer(const Duration(milliseconds: 500), () {
+      // This code runs only when user STOPS typing for 500ms
+      ref.read(searchQueryProvider.notifier).state = query;
+    });
   }
 
   void _clearSearch() {
     _searchController.clear();
-    ref
-        .read(searchQueryProvider.notifier)
-        .state = '';
+    _debounce?.cancel(); // Cancel any pending search
+    ref.read(searchQueryProvider.notifier).state = '';
   }
 
   Future<void> _refreshNotes() async {
@@ -48,7 +55,6 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
         builder: (context) => NoteEditorScreen(note: note),
       ),
     );
-    // Refresh notes after returning from editor
     _refreshNotes();
   }
 
@@ -56,21 +62,20 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
     final noteTitle = note.title.isEmpty ? 'Untitled' : note.title;
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) =>
-          AlertDialog(
-            title: const Text('Delete Note'),
-            content: Text('Are you sure you want to delete "$noteTitle"?'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Delete'),
-              ),
-            ],
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Note'),
+        content: Text('Are you sure you want to delete "$noteTitle"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
           ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
     );
 
     if (confirmed == true) {
@@ -91,7 +96,6 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
     final theme = Theme.of(context);
     final notesAsync = ref.watch(filteredNotesProvider);
     final searchQuery = ref.watch(searchQueryProvider);
-    // NEW: Watch the toggle state
     final isSemanticSearch = ref.watch(semanticSearchToggleProvider);
 
     return Scaffold(
@@ -102,23 +106,19 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
             fontWeight: FontWeight.bold,
           ),
         ),
-        // NEW: Add the AI Toggle Switch
         actions: [
           Row(
             children: [
               Icon(
                 Icons.auto_awesome,
                 size: 20,
-                color: isSemanticSearch ? theme.colorScheme.primary : Colors
-                    .grey,
+                color: isSemanticSearch ? theme.colorScheme.primary : Colors.grey,
               ),
               const SizedBox(width: 8),
               Switch(
                 value: isSemanticSearch,
                 onChanged: (value) {
-                  ref
-                      .read(semanticSearchToggleProvider.notifier)
-                      .state = value;
+                  ref.read(semanticSearchToggleProvider.notifier).state = value;
                 },
               ),
               const SizedBox(width: 8),
@@ -128,17 +128,13 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
       ),
       body: Column(
         children: [
-          // Search bar
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: TextField(
               controller: _searchController,
-              onChanged: _onSearchChanged,
+              onChanged: _onSearchChanged, // Connects to our new logic
               decoration: InputDecoration(
-                // Dynamic Hint Text
-                hintText: isSemanticSearch
-                    ? 'Ask your brain...'
-                    : 'Search notes...',
+                hintText: isSemanticSearch ? 'Ask your brain...' : 'Search notes...',
                 prefixIcon: Icon(
                   isSemanticSearch ? Icons.auto_awesome : Icons.search,
                   color: isSemanticSearch ? theme.colorScheme.primary : null,
@@ -155,15 +151,11 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
               ),
             ),
           ),
-
-          // ... (Rest of your body code: Expanded -> RefreshIndicator -> ListView)
-          // Keep the rest of the code exactly as it was
           Expanded(
             child: RefreshIndicator(
               onRefresh: _refreshNotes,
               child: notesAsync.when(
                 data: (notes) {
-                  // ... (Your existing list code)
                   if (notes.isEmpty) {
                     return searchQuery.isNotEmpty
                         ? Center(
@@ -211,8 +203,37 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
                     },
                   );
                 },
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (error, stack) => Center(child: Text('Error: $error')),
+                loading: () => const Center(
+                  child: CircularProgressIndicator(),
+                ),
+                error: (error, stack) => Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.error_outline,
+                        size: 64,
+                        color: theme.colorScheme.error,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Error loading notes',
+                        style: theme.textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        error.toString(),
+                        style: theme.textTheme.bodyMedium,
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: _refreshNotes,
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
