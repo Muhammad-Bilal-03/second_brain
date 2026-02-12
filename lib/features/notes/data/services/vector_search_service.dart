@@ -11,9 +11,12 @@ class VectorSearchService {
   // Map: noteId -> embedding vector
   final Map<String, List<double>> _embeddings = {};
 
-  /// Add or update embedding for a note
-  void upsertEmbedding(String noteId, String text) {
-    _embeddings[noteId] = EmbeddingUtils.embed(text);
+  /// Add or update embedding for a note (Async)
+  Future<void> upsertEmbedding(String noteId, String text) async {
+    final vector = await EmbeddingUtils.embed(text);
+    if (vector.isNotEmpty) {
+      _embeddings[noteId] = vector;
+    }
   }
 
   /// Remove embedding for a note
@@ -22,22 +25,34 @@ class VectorSearchService {
   }
 
   /// Bulk replace all embeddings (e.g. on app start)
-  void rebuildEmbeddings(Map<String, String> noteTexts) {
-    _embeddings
-      ..clear()
-      ..addEntries(noteTexts.entries.map(
-              (e) => MapEntry(e.key, EmbeddingUtils.embed(e.value))));
+  Future<void> rebuildEmbeddings(Map<String, String> noteTexts) async {
+    _embeddings.clear();
+
+    // Process sequentially to avoid hitting API rate limits too hard
+    // (For production, you'd want a batch processing queue)
+    for (final entry in noteTexts.entries) {
+      await upsertEmbedding(entry.key, entry.value);
+    }
   }
 
   /// Semantic search: returns top N noteIds for query string
-  List<MapEntry<String, double>> search(String query, {int topN = 10}) {
-    final queryVec = EmbeddingUtils.embed(query);
+  Future<List<MapEntry<String, double>>> search(String query, {int topN = 10}) async {
+    // 1. Get vector for the search query
+    final queryVec = await EmbeddingUtils.embed(query);
+    if (queryVec.isEmpty) return [];
+
+    // 2. Compare against all stored notes
     final scored = _embeddings.entries
         .map((e) => MapEntry(
-        e.key, EmbeddingUtils.cosineSimilarity(e.value, queryVec)))
+        e.key,
+        EmbeddingUtils.cosineSimilarity(e.value, queryVec)
+    ))
         .where((e) => e.value > 0) // skip zero similarity
         .toList();
-    scored.sort((a, b) => b.value.compareTo(a.value)); // highest first
+
+    // 3. Sort by highest similarity
+    scored.sort((a, b) => b.value.compareTo(a.value));
+
     return scored.take(topN).toList();
   }
 }

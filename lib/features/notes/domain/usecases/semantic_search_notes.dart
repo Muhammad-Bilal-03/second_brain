@@ -18,8 +18,8 @@ class SemanticSearchNotes {
       for (final n in allNotes) n.id: n
     };
 
-    // Get matching noteIds by similarity
-    final entries = vectorService.search(query, topN: topN);
+    // FIX: Added 'await' because search is now asynchronous (network call)
+    final entries = await vectorService.search(query, topN: topN);
 
     // Return found Notes in order, fallback to [] if none found
     return entries.isEmpty
