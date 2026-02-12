@@ -7,16 +7,14 @@ class VectorSearchService {
 
   VectorSearchService._internal();
 
-  // Map: noteId -> embedding vector
   final Map<String, List<double>> _embeddings = {};
 
-  /// Add or update embedding (Async/Network)
   Future<List<double>?> upsertEmbedding(String noteId, String text) async {
     try {
       final vector = await EmbeddingUtils.embed(text);
       if (vector.isNotEmpty) {
         _embeddings[noteId] = vector;
-        return vector; // Return it so we can save it to disk!
+        return vector;
       }
     } catch (e) {
       print("Embedding Error: $e");
@@ -24,10 +22,9 @@ class VectorSearchService {
     return null;
   }
 
-  /// NEW: Load pre-calculated embeddings (Instant/Offline)
   void hydrateEmbeddings(Map<String, List<double>> cache) {
     _embeddings.addAll(cache);
-    print("🧠 AI Brain hydrated with ${_embeddings.length} memories from disk.");
+    print("🧠 AI Brain hydrated with ${_embeddings.length} memories.");
   }
 
   void removeEmbedding(String noteId) {
@@ -42,10 +39,30 @@ class VectorSearchService {
         .map((e) => MapEntry(
         e.key,
         EmbeddingUtils.cosineSimilarity(e.value, queryVec)))
-        .where((e) => e.value > 0.65)
         .toList();
 
+    // Sort by highest score first
     scored.sort((a, b) => b.value.compareTo(a.value));
-    return scored.take(topN).toList();
+
+    // DEBUG: Print top score to help you tune
+    if (scored.isNotEmpty) {
+      print("🔍 Search: '$query' | Top Match Score: ${scored.first.value.toStringAsFixed(3)}");
+    }
+
+    // 🔴 TUNING FIX: Set threshold to 0.56
+    // This allows "Apple" (0.597) but blocks "Horse" (0.543)
+    final filtered = scored
+        .where((e) => e.value > 0.56)
+        .take(topN)
+        .toList();
+
+    return filtered;
+  }
+
+  Future<void> rebuildEmbeddings(Map<String, String> noteTexts) async {
+    _embeddings.clear();
+    for (final entry in noteTexts.entries) {
+      await upsertEmbedding(entry.key, entry.value);
+    }
   }
 }
