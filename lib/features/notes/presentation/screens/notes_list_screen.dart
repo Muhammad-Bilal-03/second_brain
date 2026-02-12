@@ -25,12 +25,16 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
   }
 
   void _onSearchChanged(String query) {
-    ref.read(searchQueryProvider.notifier).state = query;
+    ref
+        .read(searchQueryProvider.notifier)
+        .state = query;
   }
 
   void _clearSearch() {
     _searchController.clear();
-    ref.read(searchQueryProvider.notifier).state = '';
+    ref
+        .read(searchQueryProvider.notifier)
+        .state = '';
   }
 
   Future<void> _refreshNotes() async {
@@ -52,20 +56,21 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
     final noteTitle = note.title.isEmpty ? 'Untitled' : note.title;
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Note'),
-        content: Text('Are you sure you want to delete "$noteTitle"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+      builder: (context) =>
+          AlertDialog(
+            title: const Text('Delete Note'),
+            content: Text('Are you sure you want to delete "$noteTitle"?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Delete'),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
     );
 
     if (confirmed == true) {
@@ -86,6 +91,8 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
     final theme = Theme.of(context);
     final notesAsync = ref.watch(filteredNotesProvider);
     final searchQuery = ref.watch(searchQueryProvider);
+    // NEW: Watch the toggle state
+    final isSemanticSearch = ref.watch(semanticSearchToggleProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -95,6 +102,29 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
             fontWeight: FontWeight.bold,
           ),
         ),
+        // NEW: Add the AI Toggle Switch
+        actions: [
+          Row(
+            children: [
+              Icon(
+                Icons.auto_awesome,
+                size: 20,
+                color: isSemanticSearch ? theme.colorScheme.primary : Colors
+                    .grey,
+              ),
+              const SizedBox(width: 8),
+              Switch(
+                value: isSemanticSearch,
+                onChanged: (value) {
+                  ref
+                      .read(semanticSearchToggleProvider.notifier)
+                      .state = value;
+                },
+              ),
+              const SizedBox(width: 8),
+            ],
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -105,8 +135,14 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
               controller: _searchController,
               onChanged: _onSearchChanged,
               decoration: InputDecoration(
-                hintText: 'Search notes...',
-                prefixIcon: const Icon(Icons.search),
+                // Dynamic Hint Text
+                hintText: isSemanticSearch
+                    ? 'Ask your brain...'
+                    : 'Search notes...',
+                prefixIcon: Icon(
+                  isSemanticSearch ? Icons.auto_awesome : Icons.search,
+                  color: isSemanticSearch ? theme.colorScheme.primary : null,
+                ),
                 suffixIcon: searchQuery.isNotEmpty
                     ? IconButton(
                   icon: const Icon(Icons.clear),
@@ -120,12 +156,14 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
             ),
           ),
 
-          // Notes list
+          // ... (Rest of your body code: Expanded -> RefreshIndicator -> ListView)
+          // Keep the rest of the code exactly as it was
           Expanded(
             child: RefreshIndicator(
               onRefresh: _refreshNotes,
               child: notesAsync.when(
                 data: (notes) {
+                  // ... (Your existing list code)
                   if (notes.isEmpty) {
                     return searchQuery.isNotEmpty
                         ? Center(
@@ -173,37 +211,8 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
                     },
                   );
                 },
-                loading: () => const Center(
-                  child: CircularProgressIndicator(),
-                ),
-                error: (error, stack) => Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.error_outline,
-                        size: 64,
-                        color: theme.colorScheme.error,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Error loading notes',
-                        style: theme.textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        error.toString(),
-                        style: theme.textTheme.bodyMedium,
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: _refreshNotes,
-                        child: const Text('Retry'),
-                      ),
-                    ],
-                  ),
-                ),
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (error, stack) => Center(child: Text('Error: $error')),
               ),
             ),
           ),

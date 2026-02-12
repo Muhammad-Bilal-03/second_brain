@@ -1,6 +1,5 @@
 import '../utils/embedding_utils.dart';
 
-/// Singleton service to manage and search note embeddings in memory.
 class VectorSearchService {
   static final VectorSearchService _instance = VectorSearchService._internal();
 
@@ -11,48 +10,42 @@ class VectorSearchService {
   // Map: noteId -> embedding vector
   final Map<String, List<double>> _embeddings = {};
 
-  /// Add or update embedding for a note (Async)
-  Future<void> upsertEmbedding(String noteId, String text) async {
-    final vector = await EmbeddingUtils.embed(text);
-    if (vector.isNotEmpty) {
-      _embeddings[noteId] = vector;
+  /// Add or update embedding (Async/Network)
+  Future<List<double>?> upsertEmbedding(String noteId, String text) async {
+    try {
+      final vector = await EmbeddingUtils.embed(text);
+      if (vector.isNotEmpty) {
+        _embeddings[noteId] = vector;
+        return vector; // Return it so we can save it to disk!
+      }
+    } catch (e) {
+      print("Embedding Error: $e");
     }
+    return null;
   }
 
-  /// Remove embedding for a note
+  /// NEW: Load pre-calculated embeddings (Instant/Offline)
+  void hydrateEmbeddings(Map<String, List<double>> cache) {
+    _embeddings.addAll(cache);
+    print("🧠 AI Brain hydrated with ${_embeddings.length} memories from disk.");
+  }
+
   void removeEmbedding(String noteId) {
     _embeddings.remove(noteId);
   }
 
-  /// Bulk replace all embeddings (e.g. on app start)
-  Future<void> rebuildEmbeddings(Map<String, String> noteTexts) async {
-    _embeddings.clear();
-
-    // Process sequentially to avoid hitting API rate limits too hard
-    // (For production, you'd want a batch processing queue)
-    for (final entry in noteTexts.entries) {
-      await upsertEmbedding(entry.key, entry.value);
-    }
-  }
-
-  /// Semantic search: returns top N noteIds for query string
   Future<List<MapEntry<String, double>>> search(String query, {int topN = 10}) async {
-    // 1. Get vector for the search query
     final queryVec = await EmbeddingUtils.embed(query);
     if (queryVec.isEmpty) return [];
 
-    // 2. Compare against all stored notes
     final scored = _embeddings.entries
         .map((e) => MapEntry(
         e.key,
-        EmbeddingUtils.cosineSimilarity(e.value, queryVec)
-    ))
-        .where((e) => e.value > 0) // skip zero similarity
+        EmbeddingUtils.cosineSimilarity(e.value, queryVec)))
+        .where((e) => e.value > 0)
         .toList();
 
-    // 3. Sort by highest similarity
     scored.sort((a, b) => b.value.compareTo(a.value));
-
     return scored.take(topN).toList();
   }
 }

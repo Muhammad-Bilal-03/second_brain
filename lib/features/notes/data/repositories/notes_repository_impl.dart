@@ -7,8 +7,6 @@ import '../../domain/repositories/notes_repository.dart';
 class NotesRepositoryImpl implements NotesRepository {
   final NotesLocalDatasource localDatasource;
   final VectorSearchService _vectorSearchService = VectorSearchService();
-
-  // In-memory cache
   List<Note> _notes = [];
 
   NotesRepositoryImpl(this.localDatasource);
@@ -17,9 +15,28 @@ class NotesRepositoryImpl implements NotesRepository {
   Future<List<Note>> getAllNotes() async {
     try {
       final noteModels = await localDatasource.getNotes();
-      _notes = noteModels;
-      // Rebuild "Brain" in background
-      _rebuildNoteEmbeddings(_notes);
+      _notes = List<Note>.from(noteModels);
+
+      // 1. EXTRACT cached embeddings from notes
+      final Map<String, List<double>> cachedEmbeddings = {};
+      final List<Note> notesMissingEmbeddings = [];
+
+      for (final note in _notes) {
+        if (note.embedding != null && note.embedding!.isNotEmpty) {
+          cachedEmbeddings[note.id] = note.embedding!;
+        } else {
+          notesMissingEmbeddings.add(note);
+        }
+      }
+
+      // 2. HYDRATE the service instantly (Fast!)
+      _vectorSearchService.hydrateEmbeddings(cachedEmbeddings);
+
+      // 3. REPAIR missing embeddings in background (Slow, but rare)
+      if (notesMissingEmbeddings.isNotEmpty) {
+        _repairMissingEmbeddings(notesMissingEmbeddings);
+      }
+
       return _notes;
     } catch (e) {
       return [];
@@ -28,17 +45,23 @@ class NotesRepositoryImpl implements NotesRepository {
 
   @override
   Future<void> createNote(Note note) async {
+    // 1. Save note immediately (UI feels fast)
     _notes.add(note);
     await _saveToDisk();
-    await _upsertNoteEmbedding(note);
-  }
 
-  @override
-  Future<Note?> getNoteById(String noteId) async {
-    for (final n in _notes) {
-      if (n.id == noteId) return n;
+    // 2. Generate embedding in background
+    final vector = await _vectorSearchService.upsertEmbedding(
+        note.id, '${note.title} ${note.content}');
+
+    // 3. If successful, UPDATE the note with the new embedding and save again
+    if (vector != null) {
+      final updatedNote = note.copyWith(embedding: vector);
+      final idx = _notes.indexWhere((n) => n.id == note.id);
+      if (idx != -1) {
+        _notes[idx] = updatedNote;
+        await _saveToDisk(); // Save the "Brain" to disk!
+      }
     }
-    return null;
   }
 
   @override
@@ -47,7 +70,16 @@ class NotesRepositoryImpl implements NotesRepository {
     if (idx != -1) {
       _notes[idx] = note;
       await _saveToDisk();
-      await _upsertNoteEmbedding(note);
+
+      // Regenerate embedding
+      final vector = await _vectorSearchService.upsertEmbedding(
+          note.id, '${note.title} ${note.content}');
+
+      if (vector != null) {
+        final updatedNote = note.copyWith(embedding: vector);
+        _notes[idx] = updatedNote;
+        await _saveToDisk();
+      }
     }
   }
 
@@ -56,6 +88,15 @@ class NotesRepositoryImpl implements NotesRepository {
     _notes.removeWhere((n) => n.id == noteId);
     await _saveToDisk();
     _vectorSearchService.removeEmbedding(noteId);
+  }
+
+  // ... (getNoteById, searchNotes, semanticSearchNotes remain the same)
+  @override
+  Future<Note?> getNoteById(String noteId) async {
+    for (final n in _notes) {
+      if (n.id == noteId) return n;
+    }
+    return null;
   }
 
   @override
@@ -68,15 +109,11 @@ class NotesRepositoryImpl implements NotesRepository {
 
   @override
   Future<List<Note>> semanticSearchNotes(String query, {int topN = 10}) async {
-    // FIX: Directly use service to avoid circular dependency and unused import
     final results = await _vectorSearchService.search(query, topN: topN);
-
     final List<Note> foundNotes = [];
     for (final entry in results) {
       final note = await getNoteById(entry.key);
-      if (note != null) {
-        foundNotes.add(note);
-      }
+      if (note != null) foundNotes.add(note);
     }
     return foundNotes;
   }
@@ -86,12 +123,18 @@ class NotesRepositoryImpl implements NotesRepository {
     await localDatasource.saveNotes(models);
   }
 
-  Future<void> _rebuildNoteEmbeddings(List<Note> notes) async {
-    final noteTexts = { for (final n in notes) n.id: '${n.title} ${n.content}' };
-    await _vectorSearchService.rebuildEmbeddings(noteTexts);
-  }
+  Future<void> _repairMissingEmbeddings(List<Note> notes) async {
+    for (final note in notes) {
+      final vector = await _vectorSearchService.upsertEmbedding(
+          note.id, '${note.title} ${note.content}');
 
-  Future<void> _upsertNoteEmbedding(Note note) async {
-    await _vectorSearchService.upsertEmbedding(note.id, '${note.title} ${note.content}');
+      if (vector != null) {
+        final idx = _notes.indexWhere((n) => n.id == note.id);
+        if (idx != -1) {
+          _notes[idx] = note.copyWith(embedding: vector);
+          await _saveToDisk();
+        }
+      }
+    }
   }
 }

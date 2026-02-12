@@ -1,11 +1,14 @@
-/// Immutable Note entity
-class Note {
+import 'package:equatable/equatable.dart';
+
+class Note extends Equatable {
   final String id;
   final String title;
   final String content;
   final DateTime createdAt;
   final DateTime updatedAt;
   final String? color;
+  // NEW: Store the AI embedding vector directly in the note
+  final List<double>? embedding;
 
   const Note({
     required this.id,
@@ -14,6 +17,7 @@ class Note {
     required this.createdAt,
     required this.updatedAt,
     this.color,
+    this.embedding,
   });
 
   Note copyWith({
@@ -23,6 +27,7 @@ class Note {
     DateTime? createdAt,
     DateTime? updatedAt,
     String? color,
+    List<double>? embedding,
   }) {
     return Note(
       id: id ?? this.id,
@@ -31,30 +36,10 @@ class Note {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       color: color ?? this.color,
+      embedding: embedding ?? this.embedding,
     );
   }
 
   @override
-  bool operator ==(Object other) {
-    if (identical(this, other)) return true;
-    return other is Note &&
-        other.id == id &&
-        other.title == title &&
-        other.content == content &&
-        other.createdAt == createdAt &&
-        other.updatedAt == updatedAt &&
-        other.color == color;
-  }
-
-  @override
-  int get hashCode {
-    return Object.hash(
-      id,
-      title,
-      content,
-      createdAt,
-      updatedAt,
-      color,
-    );
-  }
+  List<Object?> get props => [id, title, content, createdAt, updatedAt, color, embedding];
 }
