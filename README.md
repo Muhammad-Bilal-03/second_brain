@@ -11,9 +11,9 @@
 
 Second Brain is a local-first, AI-powered note-taking application that lets you "chat" with your notes using Retrieval Augmented Generation (RAG). Built with Flutter for cross-platform support, it combines the power of local storage with optional cloud sync for a seamless note-taking experience.
 
-## ✨ Features (Planned)
+## ✨ Features
 
-- 📝 **Notes CRUD** — Create, read, update, and delete notes with a clean interface
+- ✅ **Notes CRUD** — Create, read, update, and delete notes with search functionality
 - 🔍 **Semantic Search** — Find notes using natural language queries powered by embeddings
 - 💬 **RAG Chat** — Have conversations with your notes using AI (Google Gemini)
 - 🎤 **Voice-to-Note** — Convert speech to text for quick note capture
@@ -27,7 +27,7 @@ Second Brain is a local-first, AI-powered note-taking application that lets you 
 | **Framework** | Flutter 3.38.4 |
 | **Language** | Dart 3.10.3 |
 | **State Management** | Riverpod 2.6+ |
-| **Local Database** | Isar DB 4.0 |
+| **Local Database** | SharedPreferences (Local-first) |
 | **AI Framework** | LangChain.dart |
 | **LLM** | Google Gemini API |
 | **Cloud Backend** | Supabase (pgvector) |
@@ -58,7 +58,7 @@ lib/
 
 ### Key Architecture Decisions
 
-- **Local-First**: All data stored locally in Isar DB for instant access
+- **Local-First**: All data stored locally using SharedPreferences for instant access
 - **Optional Cloud Sync**: Supabase integration for cross-device synchronization
 - **Clean Separation**: Domain logic isolated from UI and data layers
 - **Testable**: Architecture enables comprehensive unit and integration testing
@@ -98,7 +98,7 @@ flutter test
 
 ### Code Generation
 
-For Riverpod and Isar code generation:
+For Riverpod code generation:
 
 ```bash
 dart run build_runner build --delete-conflicting-outputs
@@ -106,14 +106,15 @@ dart run build_runner build --delete-conflicting-outputs
 
 ## 🗺️ Roadmap
 
-### Phase 1: Foundation (Notes CRUD) ⬅️ **Current**
+### Phase 1: Foundation (Notes CRUD) ✅ **Complete**
 - [x] Project setup with clean architecture
 - [x] Core dependencies and folder structure
 - [x] CI/CD with GitHub Actions
-- [ ] Basic notes CRUD with Isar DB
-- [ ] Material 3 UI with dark mode
+- [x] Notes CRUD with SharedPreferences
+- [x] Material 3 UI with search & empty states
+- [x] Riverpod state management (AsyncNotifier pattern)
 
-### Phase 2: Intelligence Layer (Embeddings + Vector Search)
+### Phase 2: Intelligence Layer (Embeddings + Vector Search) ⬅️ **Next**
 - [ ] Text embedding generation
 - [ ] Vector similarity search
 - [ ] Semantic search UI
@@ -148,7 +149,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 👨‍💻 Author
 
 **Muhammad Bilal**
-- GitHub: [@Muhammad-Bilal-03](https://github.com/Muhammad-Bilal-03)
+- GitHub: <a href="https://github.com/Muhammad-Bilal-03">@Muhammad-Bilal-03</a>
+- LinkedIn: <a href="https://www.linkedin.com/in/muhammad-bilal-bsse/">muhammad-bilal-bsse</a>
 
 ---
 
