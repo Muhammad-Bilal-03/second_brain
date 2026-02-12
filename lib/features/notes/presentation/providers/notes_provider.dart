@@ -1,10 +1,29 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/entities/note.dart';
 import '../../data/repositories/notes_repository_impl.dart';
+import '../../data/datasources/notes_local_datasource.dart'; // Import Datasource
 import 'package:shared_preferences/shared_preferences.dart';
 
-// Notes repository provider (singleton)
-final notesRepositoryProvider = Provider<NotesRepositoryImpl>((ref) => NotesRepositoryImpl());
+// SharedPreferencesProvider (initialized in main.dart)
+final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
+  throw UnimplementedError('Initialize SharedPreferences before using provider.');
+});
+
+// -----------------------------------------------------------------------------
+// NEW: Datasource Provider
+// -----------------------------------------------------------------------------
+final notesLocalDatasourceProvider = Provider<NotesLocalDatasource>((ref) {
+  final prefs = ref.watch(sharedPreferencesProvider);
+  return NotesLocalDatasource(prefs);
+});
+
+// -----------------------------------------------------------------------------
+// UPDATED: Repository Provider (Now injects the Datasource)
+// -----------------------------------------------------------------------------
+final notesRepositoryProvider = Provider<NotesRepositoryImpl>((ref) {
+  final datasource = ref.watch(notesLocalDatasourceProvider);
+  return NotesRepositoryImpl(datasource);
+});
 
 // Search query provider
 final searchQueryProvider = StateProvider<String>((ref) => '');
@@ -12,9 +31,7 @@ final searchQueryProvider = StateProvider<String>((ref) => '');
 // Semantic search toggle provider
 final semanticSearchToggleProvider = StateProvider<bool>((ref) => false);
 
-// -----------------------------------------------------------------------------
-// REFACTORED: Converted to AsyncNotifierProvider to support .notifier access
-// -----------------------------------------------------------------------------
+// Notes AsyncNotifier
 final notesProvider = AsyncNotifierProvider<NotesNotifier, List<Note>>(NotesNotifier.new);
 
 class NotesNotifier extends AsyncNotifier<List<Note>> {
@@ -28,18 +45,15 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
     return await repo.getAllNotes();
   }
 
-  /// Reload notes explicitly
   Future<void> loadNotes() async {
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(() => _fetchAllNotes());
   }
 
-  /// Add a new note
   Future<void> addNote(String title, String content) async {
     final repo = ref.read(notesRepositoryProvider);
     final now = DateTime.now();
 
-    // Create new note with generated ID (using timestamp for simplicity)
     final newNote = Note(
       id: now.millisecondsSinceEpoch.toString(),
       title: title,
@@ -50,12 +64,11 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
 
     await repo.createNote(newNote);
 
-    // Refresh the list to reflect changes
+    // Refresh to show new state
     ref.invalidateSelf();
     await future;
   }
 
-  /// Update an existing note
   Future<void> updateNote(Note note) async {
     final repo = ref.read(notesRepositoryProvider);
     final updatedNote = note.copyWith(updatedAt: DateTime.now());
@@ -66,7 +79,6 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
     await future;
   }
 
-  /// Delete a note
   Future<void> deleteNote(String id) async {
     final repo = ref.read(notesRepositoryProvider);
     await repo.deleteNote(id);
@@ -76,30 +88,21 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
   }
 }
 
-// -----------------------------------------------------------------------------
-// UPDATED: Filtered provider now watches notesProvider for updates
-// -----------------------------------------------------------------------------
+// Filtered notes provider
 final filteredNotesProvider = FutureProvider<List<Note>>((ref) async {
   final query = ref.watch(searchQueryProvider);
   final useSemantic = ref.watch(semanticSearchToggleProvider);
   final repo = ref.read(notesRepositoryProvider);
 
-  // Watch the main list so this provider updates automatically when notes are added/deleted
   final allNotesAsync = await ref.watch(notesProvider.future);
 
   if (query.isEmpty) {
     return allNotesAsync;
   } else {
-    // Perform search
     if (useSemantic) {
       return await repo.semanticSearchNotes(query);
     } else {
       return await repo.searchNotes(query);
     }
   }
-});
-
-// SharedPreferencesProvider
-final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
-  throw UnimplementedError('Initialize SharedPreferences before using provider.');
 });
