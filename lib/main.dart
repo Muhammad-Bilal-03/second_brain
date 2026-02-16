@@ -1,21 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart'; // Import dotenv
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:second_brain/app.dart';
 import 'package:second_brain/features/notes/presentation/providers/notes_provider.dart';
 
 void main() async {
-  // Ensure Flutter is initialized
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 1. Load Environment Variables (API Key)
-  await dotenv.load(fileName: ".env");
+  // 1. Load Environment Variables
+  try {
+    await dotenv.load(fileName: ".env");
+  } catch (e) {
+    print("Error loading .env file: $e");
+  }
 
   // 2. Initialize SharedPreferences
   final sharedPreferences = await SharedPreferences.getInstance();
 
-  // 3. Run app with Riverpod
+  // 3. Run the App
   runApp(
     ProviderScope(
       overrides: [

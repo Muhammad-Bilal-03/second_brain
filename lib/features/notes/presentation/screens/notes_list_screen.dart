@@ -1,7 +1,8 @@
-import 'dart:async'; // <--- Import this
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:second_brain/features/chat/presentation/screens/chat_screen.dart'; // <--- NEW IMPORT
 import 'package:second_brain/features/notes/domain/entities/note.dart';
 import 'package:second_brain/features/notes/presentation/providers/notes_provider.dart';
 import 'package:second_brain/features/notes/presentation/screens/note_editor_screen.dart';
@@ -17,30 +18,28 @@ class NotesListScreen extends ConsumerStatefulWidget {
 
 class _NotesListScreenState extends ConsumerState<NotesListScreen> {
   final TextEditingController _searchController = TextEditingController();
-  Timer? _debounce; // <--- 1. Add Timer variable
+  Timer? _debounce;
 
   @override
   void dispose() {
-    _debounce?.cancel(); // <--- 2. Cancel timer to prevent memory leaks
+    _debounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
 
-  // <--- 3. Updated Search Logic
   void _onSearchChanged(String query) {
-    // If the user types again before 500ms, cancel the previous timer
+    // Cancel the previous timer if the user types again quickly
     if (_debounce?.isActive ?? false) _debounce!.cancel();
 
-    // Start a new timer
+    // Wait for 500ms of silence before triggering the search
     _debounce = Timer(const Duration(milliseconds: 500), () {
-      // This code runs only when user STOPS typing for 500ms
       ref.read(searchQueryProvider.notifier).state = query;
     });
   }
 
   void _clearSearch() {
     _searchController.clear();
-    _debounce?.cancel(); // Cancel any pending search
+    _debounce?.cancel();
     ref.read(searchQueryProvider.notifier).state = '';
   }
 
@@ -107,6 +106,20 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
           ),
         ),
         actions: [
+          // --- NEW: Chat Button ---
+          IconButton(
+            icon: const Icon(Icons.chat_bubble_outline),
+            tooltip: 'Chat with your notes',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ChatScreen()),
+              );
+            },
+          ),
+          const SizedBox(width: 8),
+
+          // --- AI Toggle Switch ---
           Row(
             children: [
               Icon(
@@ -132,7 +145,7 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
             padding: const EdgeInsets.all(16.0),
             child: TextField(
               controller: _searchController,
-              onChanged: _onSearchChanged, // Connects to our new logic
+              onChanged: _onSearchChanged,
               decoration: InputDecoration(
                 hintText: isSemanticSearch ? 'Ask your brain...' : 'Search notes...',
                 prefixIcon: Icon(

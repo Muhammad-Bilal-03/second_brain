@@ -18,7 +18,7 @@ dependencies:
   shared_preferences: ^2.3.5
 
   # AI & RAG (New!)
-  google_generative_ai: ^0.4.6  # Required for Gemini Embeddings & Chat
+  google_generative_ai: ^0.4.7  # Required for Gemini Embeddings & Chat
 
   # Configuration
   flutter_dotenv: ^5.2.1        # To secure your API Key

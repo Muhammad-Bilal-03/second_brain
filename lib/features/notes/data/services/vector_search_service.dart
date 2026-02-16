@@ -41,7 +41,6 @@ class VectorSearchService {
         EmbeddingUtils.cosineSimilarity(e.value, queryVec)))
         .toList();
 
-    // Sort by highest score first
     scored.sort((a, b) => b.value.compareTo(a.value));
 
     // DEBUG: Print top score to help you tune
@@ -49,10 +48,10 @@ class VectorSearchService {
       print("🔍 Search: '$query' | Top Match Score: ${scored.first.value.toStringAsFixed(3)}");
     }
 
-    // 🔴 TUNING FIX: Set threshold to 0.56
+    // 🔴 TUNING FIX: Set threshold to 0.589
     // This allows "Apple" (0.597) but blocks "Horse" (0.543)
     final filtered = scored
-        .where((e) => e.value > 0.56)
+        .where((e) => e.value > 0.589)
         .take(topN)
         .toList();
 
