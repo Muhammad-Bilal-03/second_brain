@@ -8,12 +8,13 @@ class SemanticSearchToggle extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final enabled = ref.watch(semanticSearchToggleProvider);
+
     return Row(
       children: [
         const Text('Semantic Search'),
         Switch(
           value: enabled,
-          onChanged: (val) => ref.read(semanticSearchToggleProvider.notifier).state = val,
+          onChanged: (val) => ref.read(semanticSearchToggleProvider.notifier).toggle(val),
         ),
       ],
     );

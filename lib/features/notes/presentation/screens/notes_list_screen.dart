@@ -1,8 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:second_brain/features/chat/presentation/screens/chat_screen.dart'; // <--- NEW IMPORT
+import 'package:second_brain/features/chat/presentation/screens/chat_screen.dart';
 import 'package:second_brain/features/notes/domain/entities/note.dart';
 import 'package:second_brain/features/notes/presentation/providers/notes_provider.dart';
 import 'package:second_brain/features/notes/presentation/screens/note_editor_screen.dart';
@@ -28,19 +29,16 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
   }
 
   void _onSearchChanged(String query) {
-    // Cancel the previous timer if the user types again quickly
     if (_debounce?.isActive ?? false) _debounce!.cancel();
-
-    // Wait for 500ms of silence before triggering the search
     _debounce = Timer(const Duration(milliseconds: 500), () {
-      ref.read(searchQueryProvider.notifier).state = query;
+      ref.read(searchQueryProvider.notifier).update(query);
     });
   }
 
   void _clearSearch() {
     _searchController.clear();
     _debounce?.cancel();
-    ref.read(searchQueryProvider.notifier).state = '';
+    ref.read(searchQueryProvider.notifier).update('');
   }
 
   Future<void> _refreshNotes() async {
@@ -101,12 +99,9 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
       appBar: AppBar(
         title: Text(
           '🧠 Second Brain',
-          style: GoogleFonts.poppins(
-            fontWeight: FontWeight.bold,
-          ),
+          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
         ),
         actions: [
-          // --- NEW: Chat Button ---
           IconButton(
             icon: const Icon(Icons.chat_bubble_outline),
             tooltip: 'Chat with your notes',
@@ -118,8 +113,6 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
             },
           ),
           const SizedBox(width: 8),
-
-          // --- AI Toggle Switch ---
           Row(
             children: [
               Icon(
@@ -131,7 +124,7 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
               Switch(
                 value: isSemanticSearch,
                 onChanged: (value) {
-                  ref.read(semanticSearchToggleProvider.notifier).state = value;
+                  ref.read(semanticSearchToggleProvider.notifier).toggle(value);
                 },
               ),
               const SizedBox(width: 8),
@@ -159,8 +152,10 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
                 )
                     : null,
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(30),
                 ),
+                filled: true,
+                fillColor: theme.colorScheme.surfaceContainerHighest,
               ),
             ),
           ),
@@ -175,43 +170,28 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(
-                            Icons.search_off,
-                            size: 64,
-                            color: theme.colorScheme.primary
-                                .withValues(alpha: 0.5),
-                          ),
+                          Icon(Icons.search_off, size: 64, color: theme.colorScheme.primary.withValues(alpha: 0.5)),
                           const SizedBox(height: 16),
-                          Text(
-                            'No notes found',
-                            style: theme.textTheme.titleLarge,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Try a different search term',
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: theme.colorScheme.onSurface
-                                  .withValues(alpha: 0.6),
-                            ),
-                          ),
+                          const Text('No notes found'),
                         ],
                       ),
                     )
                         : const EmptyNotesWidget();
                   }
 
-                  return ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                  // Masonry Grid Layout (Pinterest Style)
+                  return MasonryGridView.count(
+                    padding: const EdgeInsets.all(12),
+                    crossAxisCount: 2,
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
                     itemCount: notes.length,
                     itemBuilder: (context, index) {
                       final note = notes[index];
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: NoteCard(
-                          note: note,
-                          onTap: () => _navigateToEditor(note: note),
-                          onLongPress: () => _deleteNote(note),
-                        ),
+                      return NoteCard(
+                        note: note,
+                        onTap: () => _navigateToEditor(note: note),
+                        onLongPress: () => _deleteNote(note),
                       );
                     },
                   );
@@ -220,32 +200,7 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
                   child: CircularProgressIndicator(),
                 ),
                 error: (error, stack) => Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.error_outline,
-                        size: 64,
-                        color: theme.colorScheme.error,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Error loading notes',
-                        style: theme.textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        error.toString(),
-                        style: theme.textTheme.bodyMedium,
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: _refreshNotes,
-                        child: const Text('Retry'),
-                      ),
-                    ],
-                  ),
+                  child: Text('Error: $error'),
                 ),
               ),
             ),

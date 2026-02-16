@@ -1,37 +1,50 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../domain/entities/note.dart';
 import '../../data/repositories/notes_repository_impl.dart';
-import '../../data/datasources/notes_local_datasource.dart'; // Import Datasource
-import 'package:shared_preferences/shared_preferences.dart';
+import '../../data/datasources/notes_local_datasource.dart';
 
-// SharedPreferencesProvider (initialized in main.dart)
+// 1. SharedPreferences Dependency
 final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
-  throw UnimplementedError('Initialize SharedPreferences before using provider.');
+  throw UnimplementedError('Initialize SharedPreferences in main.dart');
 });
 
-// -----------------------------------------------------------------------------
-// NEW: Datasource Provider
-// -----------------------------------------------------------------------------
+// 2. Data Sources & Repositories
 final notesLocalDatasourceProvider = Provider<NotesLocalDatasource>((ref) {
   final prefs = ref.watch(sharedPreferencesProvider);
   return NotesLocalDatasource(prefs);
 });
 
-// -----------------------------------------------------------------------------
-// UPDATED: Repository Provider (Now injects the Datasource)
-// -----------------------------------------------------------------------------
 final notesRepositoryProvider = Provider<NotesRepositoryImpl>((ref) {
   final datasource = ref.watch(notesLocalDatasourceProvider);
   return NotesRepositoryImpl(datasource);
 });
 
-// Search query provider
-final searchQueryProvider = StateProvider<String>((ref) => '');
+// 3. Search Query Notifier
+final searchQueryProvider = NotifierProvider<SearchQueryNotifier, String>(SearchQueryNotifier.new);
 
-// Semantic search toggle provider
-final semanticSearchToggleProvider = StateProvider<bool>((ref) => false);
+class SearchQueryNotifier extends Notifier<String> {
+  @override
+  String build() => '';
 
-// Notes AsyncNotifier
+  void update(String query) {
+    state = query;
+  }
+}
+
+// 4. Semantic Search Toggle Notifier
+final semanticSearchToggleProvider = NotifierProvider<SemanticSearchToggleNotifier, bool>(SemanticSearchToggleNotifier.new);
+
+class SemanticSearchToggleNotifier extends Notifier<bool> {
+  @override
+  bool build() => false; // Default: Off
+
+  void toggle(bool value) {
+    state = value;
+  }
+}
+
+// 5. Notes Logic (The Main Brain)
 final notesProvider = AsyncNotifierProvider<NotesNotifier, List<Note>>(NotesNotifier.new);
 
 class NotesNotifier extends AsyncNotifier<List<Note>> {
@@ -50,7 +63,8 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
     state = await AsyncValue.guard(() => _fetchAllNotes());
   }
 
-  Future<void> addNote(String title, String content) async {
+  // UPDATED: Now accepts optional color
+  Future<void> addNote(String title, String content, {String? color}) async {
     final repo = ref.read(notesRepositoryProvider);
     final now = DateTime.now();
 
@@ -60,11 +74,10 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
       content: content,
       createdAt: now,
       updatedAt: now,
+      color: color, // <--- Added Color
     );
 
     await repo.createNote(newNote);
-
-    // Refresh to show new state
     ref.invalidateSelf();
     await future;
   }
@@ -74,7 +87,6 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
     final updatedNote = note.copyWith(updatedAt: DateTime.now());
 
     await repo.updateNote(updatedNote);
-
     ref.invalidateSelf();
     await future;
   }
@@ -82,22 +94,21 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
   Future<void> deleteNote(String id) async {
     final repo = ref.read(notesRepositoryProvider);
     await repo.deleteNote(id);
-
     ref.invalidateSelf();
     await future;
   }
 }
 
-// Filtered notes provider
+// 6. Filtered Notes (The final output for UI)
 final filteredNotesProvider = FutureProvider<List<Note>>((ref) async {
   final query = ref.watch(searchQueryProvider);
   final useSemantic = ref.watch(semanticSearchToggleProvider);
   final repo = ref.read(notesRepositoryProvider);
 
-  final allNotesAsync = await ref.watch(notesProvider.future);
+  final allNotes = await ref.watch(notesProvider.future);
 
   if (query.isEmpty) {
-    return allNotesAsync;
+    return allNotes;
   } else {
     if (useSemantic) {
       return await repo.semanticSearchNotes(query);
