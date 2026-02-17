@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:second_brain/app.dart';
+import 'package:second_brain/features/notes/data/models/note_model.dart';
 import 'package:second_brain/features/notes/presentation/providers/notes_provider.dart';
 
 void main() async {
@@ -12,17 +13,21 @@ void main() async {
   try {
     await dotenv.load(fileName: ".env");
   } catch (e) {
-    print("Error loading .env file: $e");
+    debugPrint("Error loading .env file: $e"); // FIXED
   }
 
-  // 2. Initialize SharedPreferences
-  final sharedPreferences = await SharedPreferences.getInstance();
+  // 2. Initialize Hive
+  await Hive.initFlutter();
+  Hive.registerAdapter(NoteModelAdapter());
 
-  // 3. Run the App
+  // 3. Open the Box
+  final noteBox = await Hive.openBox<NoteModel>('notes');
+
+  // 4. Run the App
   runApp(
     ProviderScope(
       overrides: [
-        sharedPreferencesProvider.overrideWithValue(sharedPreferences),
+        notesBoxProvider.overrideWithValue(noteBox),
       ],
       child: const App(),
     ),

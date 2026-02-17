@@ -6,10 +6,11 @@ class Note extends Equatable {
   final String content;
   final DateTime createdAt;
   final DateTime updatedAt;
-  final String? color; // Keeping for backward compatibility, but won't use in UI
-  final List<double>? embedding;
   final bool isPinned;
-  final String type; // <--- NEW: 'text', 'checklist', 'voice', 'image'
+  final String type; // 'text', 'checklist', 'code', 'voice'
+  final List<double>? embedding;
+  final String? language;
+  final String? audioPath;
 
   const Note({
     required this.id,
@@ -17,10 +18,11 @@ class Note extends Equatable {
     required this.content,
     required this.createdAt,
     required this.updatedAt,
-    this.color,
-    this.embedding,
     this.isPinned = false,
-    this.type = 'text', // Default
+    this.type = 'text',
+    this.embedding,
+    this.language,
+    this.audioPath,
   });
 
   Note copyWith({
@@ -29,10 +31,11 @@ class Note extends Equatable {
     String? content,
     DateTime? createdAt,
     DateTime? updatedAt,
-    String? color,
-    List<double>? embedding,
     bool? isPinned,
     String? type,
+    List<double>? embedding,
+    String? language,
+    String? audioPath,
   }) {
     return Note(
       id: id ?? this.id,
@@ -40,13 +43,14 @@ class Note extends Equatable {
       content: content ?? this.content,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
-      color: color ?? this.color,
-      embedding: embedding ?? this.embedding,
       isPinned: isPinned ?? this.isPinned,
       type: type ?? this.type,
+      embedding: embedding ?? this.embedding,
+      language: language ?? this.language,
+      audioPath: audioPath ?? this.audioPath,
     );
   }
 
   @override
-  List<Object?> get props => [id, title, content, createdAt, updatedAt, color, embedding, isPinned, type];
+  List<Object?> get props => [id, title, content, createdAt, updatedAt, isPinned, type, embedding, language, audioPath];
 }

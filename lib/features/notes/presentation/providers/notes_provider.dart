@@ -1,115 +1,126 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import '../../domain/entities/note.dart';
-import '../../data/repositories/notes_repository_impl.dart';
-import '../../data/datasources/notes_local_datasource.dart';
+import 'package:hive/hive.dart';
+import 'package:uuid/uuid.dart';
+import 'package:second_brain/features/notes/data/datasources/notes_local_datasource.dart';
+import 'package:second_brain/features/notes/data/models/note_model.dart';
+import 'package:second_brain/features/notes/data/repositories/notes_repository_impl.dart';
+import 'package:second_brain/features/notes/data/services/vector_search_service.dart';
+import 'package:second_brain/features/notes/domain/entities/note.dart';
+import 'package:second_brain/features/notes/domain/repositories/notes_repository.dart';
 
-final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
-  throw UnimplementedError('Initialize SharedPreferences in main.dart');
+// --- Hive Box Provider (Overridden in main.dart) ---
+final notesBoxProvider = Provider<Box<NoteModel>>((ref) {
+  throw UnimplementedError('notesBoxProvider must be overridden in main.dart');
 });
 
-final notesLocalDatasourceProvider = Provider<NotesLocalDatasource>((ref) {
-  final prefs = ref.watch(sharedPreferencesProvider);
-  return NotesLocalDatasource(prefs);
+// --- Datasource ---
+final notesLocalDataSourceProvider = Provider<NotesLocalDatasource>((ref) {
+  final box = ref.watch(notesBoxProvider);
+  return NotesLocalDatasourceImpl(box);
 });
 
-final notesRepositoryProvider = Provider<NotesRepositoryImpl>((ref) {
-  final datasource = ref.watch(notesLocalDatasourceProvider);
-  return NotesRepositoryImpl(datasource);
+// --- Services ---
+final vectorSearchServiceProvider = Provider<VectorSearchService>((ref) {
+  return VectorSearchService();
 });
 
-final searchQueryProvider = NotifierProvider<SearchQueryNotifier, String>(SearchQueryNotifier.new);
+// --- Repository ---
+final notesRepositoryProvider = Provider<NotesRepository>((ref) {
+  final localDataSource = ref.watch(notesLocalDataSourceProvider);
+  final vectorService = ref.watch(vectorSearchServiceProvider);
+  return NotesRepositoryImpl(localDataSource, vectorService);
+});
 
-class SearchQueryNotifier extends Notifier<String> {
-  @override
-  String build() => '';
+// --- Notifier ---
+class NotesNotifier extends StateNotifier<AsyncValue<List<Note>>> {
+  final NotesRepository _repository;
 
-  void update(String query) {
-    state = query;
-  }
-}
-
-final semanticSearchToggleProvider = NotifierProvider<SemanticSearchToggleNotifier, bool>(SemanticSearchToggleNotifier.new);
-
-class SemanticSearchToggleNotifier extends Notifier<bool> {
-  @override
-  bool build() => false;
-
-  void toggle(bool value) {
-    state = value;
-  }
-}
-
-final notesProvider = AsyncNotifierProvider<NotesNotifier, List<Note>>(NotesNotifier.new);
-
-class NotesNotifier extends AsyncNotifier<List<Note>> {
-  @override
-  Future<List<Note>> build() async {
-    return _fetchAllNotes();
-  }
-
-  Future<List<Note>> _fetchAllNotes() async {
-    final repo = ref.read(notesRepositoryProvider);
-    return await repo.getAllNotes();
+  NotesNotifier(this._repository) : super(const AsyncValue.loading()) {
+    loadNotes();
   }
 
   Future<void> loadNotes() async {
-    state = const AsyncValue.loading();
-    state = await AsyncValue.guard(() => _fetchAllNotes());
+    try {
+      final notes = await _repository.getNotes();
+      state = AsyncValue.data(notes);
+    } catch (e, s) {
+      state = AsyncValue.error(e, s);
+    }
   }
 
-  // Updated to support Color and Pinned Status
-  Future<void> addNote(String title, String content, {String? color, bool isPinned = false, String type = 'text'}) async {
-    final repo = ref.read(notesRepositoryProvider);
-    final now = DateTime.now();
-
+  Future<void> addNote(String title, String content, {bool isPinned = false, String type = 'text', String? language, String? audioPath}) async {
     final newNote = Note(
-      id: now.millisecondsSinceEpoch.toString(),
+      id: const Uuid().v4(),
       title: title,
       content: content,
-      createdAt: now,
-      updatedAt: now,
-      color: color,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
       isPinned: isPinned,
-      type: type, // <--- Add this
+      type: type,
+      language: language,
+      audioPath: audioPath,
     );
-
-    await repo.createNote(newNote);
-    ref.invalidateSelf();
-    await future;
+    await _repository.saveNote(newNote);
+    await loadNotes();
   }
 
   Future<void> updateNote(Note note) async {
-    final repo = ref.read(notesRepositoryProvider);
-    final updatedNote = note.copyWith(updatedAt: DateTime.now());
-
-    await repo.updateNote(updatedNote);
-    ref.invalidateSelf();
-    await future;
+    await _repository.saveNote(note);
+    await loadNotes();
   }
 
   Future<void> deleteNote(String id) async {
-    final repo = ref.read(notesRepositoryProvider);
-    await repo.deleteNote(id);
-    ref.invalidateSelf();
-    await future;
+    await _repository.deleteNote(id);
+    await loadNotes();
   }
 }
 
+final notesProvider = StateNotifierProvider<NotesNotifier, AsyncValue<List<Note>>>((ref) {
+  final repository = ref.watch(notesRepositoryProvider);
+  return NotesNotifier(repository);
+});
+
+// --- Search State ---
+final searchQueryProvider = StateNotifierProvider<SearchQueryNotifier, String>((ref) {
+  return SearchQueryNotifier();
+});
+
+class SearchQueryNotifier extends StateNotifier<String> {
+  SearchQueryNotifier() : super('');
+  void update(String query) => state = query;
+}
+
+final semanticSearchToggleProvider = StateNotifierProvider<SemanticSearchToggleNotifier, bool>((ref) {
+  return SemanticSearchToggleNotifier();
+});
+
+class SemanticSearchToggleNotifier extends StateNotifier<bool> {
+  SemanticSearchToggleNotifier() : super(false);
+  void toggle(bool value) => state = value;
+}
+
+// --- Filtered Notes  ---
 final filteredNotesProvider = FutureProvider<List<Note>>((ref) async {
-  final query = ref.watch(searchQueryProvider);
-  final useSemantic = ref.watch(semanticSearchToggleProvider);
-  final repo = ref.read(notesRepositoryProvider);
+  // 1. Watch the AsyncValue directly (StateNotifierProvider doesn't have .future)
+  final notesAsync = ref.watch(notesProvider);
 
-  final allNotes = await ref.watch(notesProvider.future);
+  final query = ref.watch(searchQueryProvider).toLowerCase();
+  final isSemantic = ref.watch(semanticSearchToggleProvider);
+  final repository = ref.watch(notesRepositoryProvider);
 
-  if (query.isEmpty) {
-    return allNotes;
+  // 2. Safely unwrap the list. If loading/null, default to empty list to prevent crash.
+  final List<Note> notes = notesAsync.valueOrNull ?? [];
+
+  if (query.isEmpty) return notes;
+
+  if (isSemantic) {
+    // 3. Handle async Semantic Search
+    return await repository.semanticSearchNotes(query);
   } else {
-    if (useSemantic) {
-      return await repo.semanticSearchNotes(query);
-    } else {
-      return await repo.searchNotes(query);
-    }
+    // 4. Handle Standard Search (safely, since 'notes' is guaranteed non-null)
+    return notes.where((note) {
+      return note.title.toLowerCase().contains(query) ||
+          note.content.toLowerCase().contains(query);
+    }).toList();
   }
 });

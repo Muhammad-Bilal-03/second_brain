@@ -1,52 +1,42 @@
-import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:second_brain/features/notes/data/models/note_model.dart';
+import 'package:second_brain/core/errors/failures.dart';
 
-/// Local data source for notes using SharedPreferences
-class NotesLocalDatasource {
-  final SharedPreferences sharedPreferences;
-  static const String _notesKey = 'notes_list';
+abstract class NotesLocalDatasource {
+  Future<List<NoteModel>> getNotes();
+  Future<void> cacheNote(NoteModel note);
+  Future<void> deleteNote(String id);
+}
 
-  const NotesLocalDatasource(this.sharedPreferences);
+class NotesLocalDatasourceImpl implements NotesLocalDatasource {
+  final Box<NoteModel> _noteBox;
 
-  /// Get all notes from SharedPreferences
+  NotesLocalDatasourceImpl(this._noteBox);
+
+  @override
   Future<List<NoteModel>> getNotes() async {
     try {
-      final String? notesJson = sharedPreferences.getString(_notesKey);
-      if (notesJson == null || notesJson.isEmpty) {
-        return [];
-      }
-
-      final List<dynamic> notesList = json.decode(notesJson);
-      return notesList
-          .map((noteMap) => NoteModel.fromJson(noteMap as Map<String, dynamic>))
-          .toList();
+      return _noteBox.values.toList();
     } catch (e) {
-      // Return empty list on error
-      return [];
+      throw const CacheFailure(); // FIXED: const
     }
   }
 
-  /// Save notes to SharedPreferences
-  Future<void> saveNotes(List<NoteModel> notes) async {
+  @override
+  Future<void> cacheNote(NoteModel note) async {
     try {
-      final List<Map<String, dynamic>> notesJson =
-          notes.map((note) => note.toJson()).toList();
-      final String encodedNotes = json.encode(notesJson);
-      await sharedPreferences.setString(_notesKey, encodedNotes);
+      await _noteBox.put(note.id, note);
     } catch (e) {
-      throw Exception('Failed to save notes: $e');
+      throw const CacheFailure();
     }
   }
 
-  /// Delete a note by ID
+  @override
   Future<void> deleteNote(String id) async {
     try {
-      final notes = await getNotes();
-      final updatedNotes = notes.where((note) => note.id != id).toList();
-      await saveNotes(updatedNotes);
+      await _noteBox.delete(id);
     } catch (e) {
-      throw Exception('Failed to delete note: $e');
+      throw const CacheFailure();
     }
   }
 }
