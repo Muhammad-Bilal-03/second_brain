@@ -6,9 +6,10 @@ class Note extends Equatable {
   final String content;
   final DateTime createdAt;
   final DateTime updatedAt;
-  final String? color;
-  // NEW: Store the AI embedding vector directly in the note
+  final String? color; // Keeping for backward compatibility, but won't use in UI
   final List<double>? embedding;
+  final bool isPinned;
+  final String type; // <--- NEW: 'text', 'checklist', 'voice', 'image'
 
   const Note({
     required this.id,
@@ -18,6 +19,8 @@ class Note extends Equatable {
     required this.updatedAt,
     this.color,
     this.embedding,
+    this.isPinned = false,
+    this.type = 'text', // Default
   });
 
   Note copyWith({
@@ -28,6 +31,8 @@ class Note extends Equatable {
     DateTime? updatedAt,
     String? color,
     List<double>? embedding,
+    bool? isPinned,
+    String? type,
   }) {
     return Note(
       id: id ?? this.id,
@@ -37,9 +42,11 @@ class Note extends Equatable {
       updatedAt: updatedAt ?? this.updatedAt,
       color: color ?? this.color,
       embedding: embedding ?? this.embedding,
+      isPinned: isPinned ?? this.isPinned,
+      type: type ?? this.type,
     );
   }
 
   @override
-  List<Object?> get props => [id, title, content, createdAt, updatedAt, color, embedding];
+  List<Object?> get props => [id, title, content, createdAt, updatedAt, color, embedding, isPinned, type];
 }

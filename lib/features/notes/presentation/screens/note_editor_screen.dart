@@ -8,7 +8,9 @@ import 'package:second_brain/features/notes/data/services/voice_service.dart';
 
 class NoteEditorScreen extends ConsumerStatefulWidget {
   final Note? note;
-  const NoteEditorScreen({super.key, this.note});
+  final String initialType; // 'text', 'checklist', 'voice'
+
+  const NoteEditorScreen({super.key, this.note, this.initialType = 'text'});
 
   @override
   ConsumerState<NoteEditorScreen> createState() => _NoteEditorScreenState();
@@ -24,18 +26,8 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> with Single
   String _textBeforeRecording = '';
   StreamSubscription<String>? _voiceStatusSubscription;
 
-  // Colors for the note
-  final List<Color> _noteColors = [
-    const Color(0xFFFFFFFF), // Default White
-    const Color(0xFFFAE8E8), // Red
-    const Color(0xFFFFF6D1), // Yellow
-    const Color(0xFFE4F7D3), // Green
-    const Color(0xFFD4EBF7), // Blue
-    const Color(0xFFF3E5F5), // Purple
-    const Color(0xFFF0F0F0), // Grey
-  ];
-  late Color _selectedColor;
-
+  late String _noteType;
+  bool _isPinned = false;
   bool _hasUnsavedChanges = false;
   bool _isSaving = false;
 
@@ -46,16 +38,12 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> with Single
     super.initState();
     _titleController = TextEditingController(text: widget.note?.title ?? '');
     _contentController = TextEditingController(text: widget.note?.content ?? '');
+    _isPinned = widget.note?.isPinned ?? false;
+    _noteType = widget.note?.type ?? widget.initialType;
 
-    // Parse existing color
-    if (widget.note?.color != null) {
-      try {
-        _selectedColor = Color(int.parse(widget.note!.color!.replaceFirst('#', '0xFF')));
-      } catch (e) {
-        _selectedColor = _noteColors[0];
-      }
-    } else {
-      _selectedColor = _noteColors[0];
+    // Auto-init checklist if it's a checklist type and empty
+    if (_noteType == 'checklist' && _contentController.text.isEmpty) {
+      _contentController.text = "[ ] ";
     }
 
     _titleController.addListener(_onContentChanged);
@@ -64,6 +52,12 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> with Single
     _lockAnimController = AnimationController(vsync: this, duration: const Duration(milliseconds: 200));
 
     _initVoiceListener();
+
+    // Auto-start voice if type is voice
+    if (_noteType == 'voice' && widget.note == null) {
+      // We delay slightly to let UI build first
+      Future.delayed(const Duration(milliseconds: 500), _startRecording);
+    }
   }
 
   void _initVoiceListener() async {
@@ -79,6 +73,19 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> with Single
 
   void _onContentChanged() {
     if (!_hasUnsavedChanges) setState(() => _hasUnsavedChanges = true);
+
+    // Simple Checklist Logic: If user presses enter, add "[ ] "
+    if (_noteType == 'checklist') {
+      final text = _contentController.text;
+      if (text.endsWith('\n')) {
+        // Avoid infinite loop by removing listener temporarily or checking cursor
+        // For simple MVP, just adding it on next frame if not present
+        if (!text.endsWith('\n[ ] ')) {
+          // This is a basic implementation. A robust one requires FocusNode listening.
+          // Keeping it simple for now: Manual toggle is safer.
+        }
+      }
+    }
   }
 
   @override
@@ -92,7 +99,6 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> with Single
   }
 
   // --- Voice Logic ---
-
   void _startRecording() {
     if (_isRecording) return;
     _textBeforeRecording = _contentController.text;
@@ -124,9 +130,11 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> with Single
     _lockAnimController.reverse();
   }
 
-  // --- Note Logic ---
-
+  // --- Actions ---
   void _toggleChecklist() {
+    setState(() {
+      _noteType = 'checklist';
+    });
     final text = _contentController.text;
     if (text.isEmpty) {
       _contentController.text = "[ ] ";
@@ -136,27 +144,39 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> with Single
     _onContentChanged();
   }
 
+  void _togglePin() {
+    setState(() {
+      _isPinned = !_isPinned;
+      _hasUnsavedChanges = true;
+    });
+  }
+
   Future<void> _saveNote() async {
     if (_isSaving) return;
     final title = _titleController.text.trim();
     final content = _contentController.text.trim();
 
     if (title.isEmpty && content.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cannot save an empty note')));
+      // Allow empty save if it was just opened? No, prevent clutter.
+      // But if we navigated back, we might want to delete it?
+      // For now, just show message.
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Empty note discarded')));
       return;
     }
 
     setState(() => _isSaving = true);
 
-    // Correct color conversion
-    final colorHex = '#${_selectedColor.value.toRadixString(16).substring(2)}';
-
     try {
       final notesNotifier = ref.read(notesProvider.notifier);
       if (widget.note == null) {
-        await notesNotifier.addNote(title, content, color: colorHex);
+        await notesNotifier.addNote(title, content, isPinned: _isPinned, type: _noteType);
       } else {
-        final updatedNote = widget.note!.copyWith(title: title, content: content, color: colorHex);
+        final updatedNote = widget.note!.copyWith(
+          title: title,
+          content: content,
+          isPinned: _isPinned,
+          type: _noteType,
+        );
         await notesNotifier.updateNote(updatedNote);
       }
       setState(() { _hasUnsavedChanges = false; _isSaving = false; });
@@ -167,73 +187,6 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> with Single
     }
   }
 
-  Future<void> _deleteNote() async {
-    if (widget.note == null) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Note'),
-        content: const Text('Are you sure you want to delete this note?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
-        ],
-      ),
-    );
-
-    if (confirmed == true && mounted) {
-      await ref.read(notesProvider.notifier).deleteNote(widget.note!.id);
-      if (mounted) Navigator.pop(context);
-    }
-  }
-
-  void _showColorPicker() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: SizedBox(
-          height: 80,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: _noteColors.length,
-            itemBuilder: (context, index) {
-              final color = _noteColors[index];
-              return GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _selectedColor = color;
-                    _hasUnsavedChanges = true;
-                  });
-                  Navigator.pop(context);
-                },
-                child: Container(
-                  width: 50,
-                  height: 50,
-                  margin: const EdgeInsets.symmetric(horizontal: 8),
-                  decoration: BoxDecoration(
-                    color: color,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: _selectedColor == color ? Colors.black : Colors.grey.shade300,
-                      width: _selectedColor == color ? 3 : 1,
-                    ),
-                    boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -241,28 +194,39 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> with Single
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: _selectedColor,
-        iconTheme: IconThemeData(color: Colors.black),
         actions: [
-          IconButton(icon: const Icon(Icons.palette), onPressed: _showColorPicker),
-          if (isEditMode) IconButton(icon: const Icon(Icons.delete), onPressed: _deleteNote),
-          IconButton(icon: const Icon(Icons.check_box), onPressed: _toggleChecklist),
           IconButton(
-            icon: _isSaving ? const CircularProgressIndicator() : const Icon(Icons.save),
+            icon: Icon(_isPinned ? Icons.push_pin : Icons.push_pin_outlined),
+            tooltip: _isPinned ? 'Unpin' : 'Pin',
+            onPressed: _togglePin,
+          ),
+          IconButton(
+            icon: const Icon(Icons.check_box_outlined),
+            onPressed: _toggleChecklist,
+          ),
+          IconButton(
+            icon: _isSaving
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.save),
             onPressed: _isSaving ? null : _saveNote,
           ),
         ],
       ),
-      backgroundColor: _selectedColor,
       body: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10),
         child: Column(
           children: [
             TextField(
               controller: _titleController,
-              autofocus: !isEditMode,
-              style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.bold),
-              decoration: const InputDecoration(hintText: 'Title', border: InputBorder.none),
+              autofocus: !isEditMode && _noteType == 'text',
+              style: GoogleFonts.poppins(
+                fontSize: 24,
+                fontWeight: FontWeight.w600,
+              ),
+              decoration: const InputDecoration(
+                hintText: 'Title',
+                border: InputBorder.none,
+              ),
               textCapitalization: TextCapitalization.sentences,
             ),
             Expanded(
@@ -270,10 +234,12 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> with Single
                 controller: _contentController,
                 maxLines: null,
                 expands: true,
-                style: theme.textTheme.bodyLarge,
+                style: theme.textTheme.bodyLarge?.copyWith(height: 1.5),
                 decoration: InputDecoration(
                   hintText: _isRecording ? 'Listening...' : 'Note content...',
-                  hintStyle: _isRecording ? TextStyle(color: theme.colorScheme.primary, fontWeight: FontWeight.bold) : null,
+                  hintStyle: _isRecording
+                      ? TextStyle(color: theme.colorScheme.primary, fontWeight: FontWeight.bold)
+                      : null,
                   border: InputBorder.none,
                 ),
                 textCapitalization: TextCapitalization.sentences,
@@ -282,6 +248,8 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> with Single
           ],
         ),
       ),
+
+      // Floating Mic Button Logic
       floatingActionButton: GestureDetector(
         onLongPressStart: (_) => _startRecording(),
         onLongPressEnd: (_) => _stopRecording(),
@@ -292,16 +260,17 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> with Single
         },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          width: 56,
-          height: 56,
+          width: 60,
+          height: 60,
           decoration: BoxDecoration(
             color: _isRecording ? Colors.red : theme.colorScheme.primary,
             shape: BoxShape.circle,
-            boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2))],
+            boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 4))],
           ),
           child: Icon(
-            _isLocked ? Icons.lock : (_isRecording ? Icons.mic_off : Icons.mic),
+            _isLocked ? Icons.lock : (_isRecording ? Icons.stop : Icons.mic),
             color: Colors.white,
+            size: 28,
           ),
         ),
       ),

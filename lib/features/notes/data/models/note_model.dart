@@ -9,6 +9,8 @@ class NoteModel extends Note {
     required super.updatedAt,
     super.color,
     super.embedding,
+    required super.isPinned,
+    required super.type,
   });
 
   factory NoteModel.fromJson(Map<String, dynamic> json) {
@@ -19,10 +21,11 @@ class NoteModel extends Note {
       createdAt: DateTime.parse(json['createdAt'] as String),
       updatedAt: DateTime.parse(json['updatedAt'] as String),
       color: json['color'] as String?,
-      // Load the list of doubles safely
       embedding: (json['embedding'] as List<dynamic>?)
           ?.map((e) => (e as num).toDouble())
           .toList(),
+      isPinned: json['isPinned'] ?? false,
+      type: json['type'] ?? 'text', // Load type
     );
   }
 
@@ -34,8 +37,9 @@ class NoteModel extends Note {
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
       'color': color,
-      // Save the embedding
       'embedding': embedding,
+      'isPinned': isPinned,
+      'type': type, // Save type
     };
   }
 
@@ -48,6 +52,8 @@ class NoteModel extends Note {
       updatedAt: note.updatedAt,
       color: note.color,
       embedding: note.embedding,
+      isPinned: note.isPinned,
+      type: note.type,
     );
   }
 }

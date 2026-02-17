@@ -21,6 +21,10 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
   final TextEditingController _searchController = TextEditingController();
   Timer? _debounce;
 
+  // Selection Mode State
+  bool _isSelectionMode = false;
+  final Set<String> _selectedNoteIds = {};
+
   @override
   void dispose() {
     _debounce?.cancel();
@@ -28,6 +32,7 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
     super.dispose();
   }
 
+  // --- Search Logic ---
   void _onSearchChanged(String query) {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
     _debounce = Timer(const Duration(milliseconds: 500), () {
@@ -45,47 +50,130 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
     await ref.read(notesProvider.notifier).loadNotes();
   }
 
-  void _navigateToEditor({Note? note}) async {
+  // --- Navigation & Creation ---
+  void _navigateToEditor({Note? note, String type = 'text'}) async {
+    // If in selection mode, cancel it instead of navigating
+    if (_isSelectionMode) {
+      setState(() {
+        _isSelectionMode = false;
+        _selectedNoteIds.clear();
+      });
+      return;
+    }
+
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => NoteEditorScreen(note: note),
+        builder: (context) => NoteEditorScreen(note: note, initialType: type),
       ),
     );
     _refreshNotes();
   }
 
-  Future<void> _deleteNote(Note note) async {
-    final noteTitle = note.title.isEmpty ? 'Untitled' : note.title;
-    final confirmed = await showDialog<bool>(
+  void _showCreateOptions() {
+    showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Note'),
-        content: Text('Are you sure you want to delete "$noteTitle"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 20),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _buildOption(Icons.text_fields, "Text", 'text'),
+              _buildOption(Icons.check_box_outlined, "Checklist", 'checklist'),
+              _buildOption(Icons.mic, "Voice", 'voice'),
+              _buildOption(Icons.image, "Image", 'image'),
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete'),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOption(IconData icon, String label, String type) {
+    return InkWell(
+      onTap: () {
+        Navigator.pop(context); // Close sheet
+        if (type == 'image') {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Image notes coming soon!")));
+        } else {
+          _navigateToEditor(type: type);
+        }
+      },
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primaryContainer,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 28, color: Theme.of(context).colorScheme.onPrimaryContainer),
           ),
+          const SizedBox(height: 8),
+          Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
         ],
       ),
     );
+  }
 
-    if (confirmed == true) {
-      try {
-        await ref.read(notesProvider.notifier).deleteNote(note.id);
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error deleting note: $e')),
-          );
+  // --- Selection Logic ---
+  void _toggleSelection(String noteId) {
+    setState(() {
+      if (_selectedNoteIds.contains(noteId)) {
+        _selectedNoteIds.remove(noteId);
+        if (_selectedNoteIds.isEmpty) {
+          _isSelectionMode = false;
         }
+      } else {
+        _selectedNoteIds.add(noteId);
       }
+    });
+  }
+
+  void _enterSelectionMode(String noteId) {
+    setState(() {
+      _isSelectionMode = true;
+      _selectedNoteIds.add(noteId);
+    });
+  }
+
+  Future<void> _deleteSelected() async {
+    final ids = _selectedNoteIds.toList();
+    for (var id in ids) {
+      await ref.read(notesProvider.notifier).deleteNote(id);
     }
+    setState(() {
+      _isSelectionMode = false;
+      _selectedNoteIds.clear();
+    });
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Deleted ${ids.length} notes")));
+    }
+  }
+
+  Future<void> _pinSelected(List<Note> allNotes) async {
+    // Find selected notes and toggle their pin status (based on the first one)
+    if (_selectedNoteIds.isEmpty) return;
+
+    final firstId = _selectedNoteIds.first;
+    final firstNote = allNotes.firstWhere((n) => n.id == firstId);
+    final newPinState = !firstNote.isPinned; // Toggle
+
+    for (var id in _selectedNoteIds) {
+      final note = allNotes.firstWhere((n) => n.id == id);
+      await ref.read(notesProvider.notifier).updateNote(note.copyWith(isPinned: newPinState));
+    }
+
+    setState(() {
+      _isSelectionMode = false;
+      _selectedNoteIds.clear();
+    });
   }
 
   @override
@@ -95,121 +183,149 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
     final searchQuery = ref.watch(searchQueryProvider);
     final isSemanticSearch = ref.watch(semanticSearchToggleProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          '🧠 Second Brain',
-          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.chat_bubble_outline),
-            tooltip: 'Chat with your notes',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const ChatScreen()),
-              );
-            },
-          ),
-          const SizedBox(width: 8),
-          Row(
-            children: [
-              Icon(
-                Icons.auto_awesome,
-                size: 20,
-                color: isSemanticSearch ? theme.colorScheme.primary : Colors.grey,
+    return WillPopScope(
+      onWillPop: () async {
+        if (_isSelectionMode) {
+          setState(() {
+            _isSelectionMode = false;
+            _selectedNoteIds.clear();
+          });
+          return false;
+        }
+        return true;
+      },
+      child: Scaffold(
+        backgroundColor: theme.colorScheme.surface,
+        body: NestedScrollView(
+          headerSliverBuilder: (context, innerBoxIsScrolled) => [
+            _isSelectionMode
+                ? SliverAppBar(
+              pinned: true,
+              backgroundColor: theme.colorScheme.primaryContainer,
+              leading: IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => setState(() {
+                  _isSelectionMode = false;
+                  _selectedNoteIds.clear();
+                }),
               ),
-              const SizedBox(width: 8),
-              Switch(
-                value: isSemanticSearch,
-                onChanged: (value) {
-                  ref.read(semanticSearchToggleProvider.notifier).toggle(value);
-                },
-              ),
-              const SizedBox(width: 8),
-            ],
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: TextField(
-              controller: _searchController,
-              onChanged: _onSearchChanged,
-              decoration: InputDecoration(
-                hintText: isSemanticSearch ? 'Ask your brain...' : 'Search notes...',
-                prefixIcon: Icon(
-                  isSemanticSearch ? Icons.auto_awesome : Icons.search,
-                  color: isSemanticSearch ? theme.colorScheme.primary : null,
+              title: Text("${_selectedNoteIds.length} Selected"),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.push_pin),
+                  onPressed: () => notesAsync.whenData((notes) => _pinSelected(notes)),
                 ),
-                suffixIcon: searchQuery.isNotEmpty
-                    ? IconButton(
-                  icon: const Icon(Icons.clear),
-                  onPressed: _clearSearch,
-                )
-                    : null,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(30),
+                IconButton(
+                  icon: const Icon(Icons.delete),
+                  onPressed: _deleteSelected,
                 ),
-                filled: true,
-                fillColor: theme.colorScheme.surfaceContainerHighest,
+              ],
+            )
+                : SliverAppBar(
+              floating: true,
+              snap: true,
+              title: Text(
+                '🧠 Second Brain',
+                style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
               ),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.chat_bubble_outline_rounded),
+                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ChatScreen())),
+                ),
+                Transform.scale(
+                  scale: 0.8,
+                  child: Switch(
+                    value: isSemanticSearch,
+                    activeColor: theme.colorScheme.primary,
+                    onChanged: (val) => ref.read(semanticSearchToggleProvider.notifier).toggle(val),
+                  ),
+                ),
+                const SizedBox(width: 12),
+              ],
             ),
-          ),
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: _refreshNotes,
-              child: notesAsync.when(
-                data: (notes) {
-                  if (notes.isEmpty) {
-                    return searchQuery.isNotEmpty
-                        ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.search_off, size: 64, color: theme.colorScheme.primary.withValues(alpha: 0.5)),
-                          const SizedBox(height: 16),
-                          const Text('No notes found'),
-                        ],
+          ],
+          body: Column(
+            children: [
+              // Search Bar (Only show if not selecting)
+              if (!_isSelectionMode)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(28),
+                      border: isSemanticSearch
+                          ? Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.5), width: 1.5)
+                          : null,
+                    ),
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: _onSearchChanged,
+                      textAlignVertical: TextAlignVertical.center,
+                      decoration: InputDecoration(
+                        hintText: isSemanticSearch ? 'Ask your brain...' : 'Search notes...',
+                        prefixIcon: Icon(isSemanticSearch ? Icons.auto_awesome : Icons.search),
+                        suffixIcon: searchQuery.isNotEmpty
+                            ? IconButton(icon: const Icon(Icons.close), onPressed: _clearSearch)
+                            : null,
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 20),
                       ),
-                    )
-                        : const EmptyNotesWidget();
-                  }
+                    ),
+                  ),
+                ),
 
-                  // Masonry Grid Layout (Pinterest Style)
-                  return MasonryGridView.count(
-                    padding: const EdgeInsets.all(12),
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 12,
-                    crossAxisSpacing: 12,
-                    itemCount: notes.length,
-                    itemBuilder: (context, index) {
-                      final note = notes[index];
-                      return NoteCard(
-                        note: note,
-                        onTap: () => _navigateToEditor(note: note),
-                        onLongPress: () => _deleteNote(note),
+              Expanded(
+                child: RefreshIndicator(
+                  onRefresh: _refreshNotes,
+                  child: notesAsync.when(
+                    data: (notes) {
+                      if (notes.isEmpty) {
+                        return searchQuery.isNotEmpty
+                            ? const Center(child: Text('No notes found'))
+                            : const EmptyNotesWidget();
+                      }
+
+                      return MasonryGridView.count(
+                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 80),
+                        crossAxisCount: 2,
+                        mainAxisSpacing: 10,
+                        crossAxisSpacing: 10,
+                        itemCount: notes.length,
+                        itemBuilder: (context, index) {
+                          final note = notes[index];
+                          final isSelected = _selectedNoteIds.contains(note.id);
+
+                          return NoteCard(
+                            note: note,
+                            isSelected: isSelected,
+                            onTap: () {
+                              if (_isSelectionMode) {
+                                _toggleSelection(note.id);
+                              } else {
+                                _navigateToEditor(note: note, type: note.type);
+                              }
+                            },
+                            onLongPress: () => _enterSelectionMode(note.id),
+                          );
+                        },
                       );
                     },
-                  );
-                },
-                loading: () => const Center(
-                  child: CircularProgressIndicator(),
-                ),
-                error: (error, stack) => Center(
-                  child: Text('Error: $error'),
+                    loading: () => const Center(child: CircularProgressIndicator()),
+                    error: (e, s) => Center(child: Text('Error: $e')),
+                  ),
                 ),
               ),
-            ),
+            ],
           ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _navigateToEditor(),
-        child: const Icon(Icons.add),
+        ),
+        floatingActionButton: !_isSelectionMode
+            ? FloatingActionButton(
+          onPressed: _showCreateOptions, // Opens the Bottom Sheet Menu
+          child: const Icon(Icons.add),
+        )
+            : null, // Hide FAB when selecting
       ),
     );
   }

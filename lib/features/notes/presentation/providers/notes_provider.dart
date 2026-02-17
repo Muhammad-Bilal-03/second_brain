@@ -4,12 +4,10 @@ import '../../domain/entities/note.dart';
 import '../../data/repositories/notes_repository_impl.dart';
 import '../../data/datasources/notes_local_datasource.dart';
 
-// 1. SharedPreferences Dependency
 final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
   throw UnimplementedError('Initialize SharedPreferences in main.dart');
 });
 
-// 2. Data Sources & Repositories
 final notesLocalDatasourceProvider = Provider<NotesLocalDatasource>((ref) {
   final prefs = ref.watch(sharedPreferencesProvider);
   return NotesLocalDatasource(prefs);
@@ -20,7 +18,6 @@ final notesRepositoryProvider = Provider<NotesRepositoryImpl>((ref) {
   return NotesRepositoryImpl(datasource);
 });
 
-// 3. Search Query Notifier
 final searchQueryProvider = NotifierProvider<SearchQueryNotifier, String>(SearchQueryNotifier.new);
 
 class SearchQueryNotifier extends Notifier<String> {
@@ -32,19 +29,17 @@ class SearchQueryNotifier extends Notifier<String> {
   }
 }
 
-// 4. Semantic Search Toggle Notifier
 final semanticSearchToggleProvider = NotifierProvider<SemanticSearchToggleNotifier, bool>(SemanticSearchToggleNotifier.new);
 
 class SemanticSearchToggleNotifier extends Notifier<bool> {
   @override
-  bool build() => false; // Default: Off
+  bool build() => false;
 
   void toggle(bool value) {
     state = value;
   }
 }
 
-// 5. Notes Logic (The Main Brain)
 final notesProvider = AsyncNotifierProvider<NotesNotifier, List<Note>>(NotesNotifier.new);
 
 class NotesNotifier extends AsyncNotifier<List<Note>> {
@@ -63,8 +58,8 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
     state = await AsyncValue.guard(() => _fetchAllNotes());
   }
 
-  // UPDATED: Now accepts optional color
-  Future<void> addNote(String title, String content, {String? color}) async {
+  // Updated to support Color and Pinned Status
+  Future<void> addNote(String title, String content, {String? color, bool isPinned = false, String type = 'text'}) async {
     final repo = ref.read(notesRepositoryProvider);
     final now = DateTime.now();
 
@@ -74,7 +69,9 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
       content: content,
       createdAt: now,
       updatedAt: now,
-      color: color, // <--- Added Color
+      color: color,
+      isPinned: isPinned,
+      type: type, // <--- Add this
     );
 
     await repo.createNote(newNote);
@@ -99,7 +96,6 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
   }
 }
 
-// 6. Filtered Notes (The final output for UI)
 final filteredNotesProvider = FutureProvider<List<Note>>((ref) async {
   final query = ref.watch(searchQueryProvider);
   final useSemantic = ref.watch(semanticSearchToggleProvider);
