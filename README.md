@@ -1,157 +1,125 @@
 # 🧠 Second Brain
 
-**RAG-Powered Note Taking App — Chat with your notes using AI**
-
-[![Flutter](https://img.shields.io/badge/Flutter-3.38.4-02569B?logo=flutter)](https://flutter.dev)
-[![Dart](https://img.shields.io/badge/Dart-3.10.3-0175C2?logo=dart)](https://dart.dev)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![CI](https://github.com/Muhammad-Bilal-03/second_brain/actions/workflows/ci.yml/badge.svg)](https://github.com/Muhammad-Bilal-03/second_brain/actions/workflows/ci.yml)
+**A Local-First, AI-Powered Note Taking App**
 
 ## 📖 Overview
 
-Second Brain is a local-first, AI-powered note-taking application that lets you "chat" with your notes using Retrieval Augmented Generation (RAG). Built with Flutter for cross-platform support, it combines the power of local storage with optional cloud sync for a seamless note-taking experience.
+**Second Brain** is an intelligent note-taking application designed to capture thoughts in any format—text, voice, code, or checklists—and retrieve them instantly using AI. Unlike traditional apps that rely on keyword matching, Second Brain uses **Vector Embeddings** and **Google Gemini** to understand the *meaning* of your notes, allowing you to find information even if you don't remember the exact words.
 
-## ✨ Features
+Built with a **Local-First** architecture using Hive, it ensures your data is always accessible, blazing fast, and private on your device.
 
-- ✅ **Notes CRUD** — Create, read, update, and delete notes with search functionality
-- 🔍 **Semantic Search** — Find notes using natural language queries powered by embeddings
-- 💬 **RAG Chat** — Have conversations with your notes using AI (Google Gemini)
-- 🎤 **Voice-to-Note** — Convert speech to text for quick note capture
-- ☁️ **Cloud Sync** — Optional synchronization with Supabase (pgvector for embeddings)
-- 🌓 **Dark Mode** — Beautiful Material 3 theme with light and dark modes
+## ✨ Key Features
+
+### 📝 Multi-Modal Note Taking
+
+Capture ideas in the format that fits best:
+
+* **Text Notes**: Rich text support for daily thoughts.
+* **✅ Smart Checklists**: Interactive tasks with reordering and strikethrough.
+* **💻 Code Snippets**: A full IDE-like experience with **syntax highlighting** (Atom One Dark theme) and language detection.
+* **🎙️ Dual-Mode Voice**:
+* **Transcribe**: Convert speech to text instantly.
+* **Record**: Save actual audio files (`.m4a`) with an in-note playback player.
+
+
+
+### 🧠 AI & Intelligence
+
+* **Semantic Search**: Search by meaning, not just keywords. (e.g., searching for "groceries" will find "milk and eggs").
+* **Local Embeddings**: Vector search logic runs efficiently on-device.
+* **Google Gemini Integration**: Uses Gemini 1.5 Flash for reasoning and data processing.
+
+### ⚡ Performance & UI
+
+* **Offline-First**: Powered by **Hive** (NoSQL), making it faster than SQL-based apps.
+* **Material 3 Design**: A modern, clean interface with Dark Mode support.
+* **Gatekeeper Logic**: Prevents AI hallucinations by verifying relevance before answering.
 
 ## 🛠️ Tech Stack
 
-| Category | Technology |
-|----------|-----------|
-| **Framework** | Flutter 3.38.4 |
-| **Language** | Dart 3.10.3 |
-| **State Management** | Riverpod 2.6+ |
-| **Local Database** | SharedPreferences (Local-first) |
-| **AI Framework** | LangChain.dart |
-| **LLM** | Google Gemini API |
-| **Cloud Backend** | Supabase (pgvector) |
+| Category | Technology | Usage |
+| --- | --- | --- |
+| **Framework** | Flutter | Cross-platform UI |
+| **Language** | Dart | Business Logic |
+| **State Management** | Riverpod 2.6+ | App State & Dependency Injection |
+| **Local Database** | Hive | NoSQL Storage (Replaces SharedPreferences) |
+| **AI Model** | Google Gemini API | RAG & Embeddings |
+| **Code Editor** | Flutter Code Editor | Syntax Highlighting |
+| **Audio Engine** | Record & Audioplayers | Voice Recording & Playback |
 
 ## 🏗️ Architecture
 
-Second Brain follows **Clean Architecture** principles combined with **MVVM** pattern in a feature-based folder structure:
+The app follows **Clean Architecture** principles to ensure scalability and testability:
 
 ```
 lib/
-├── app.dart                    # App root widget
-├── main.dart                   # Entry point
-├── core/                       # Core utilities
-│   ├── constants/             # App constants
-│   ├── errors/                # Error handling
-│   ├── theme/                 # App theme
-│   └── utils/                 # Extensions & helpers
-├── features/                   # Feature modules
-│   ├── notes/                 # Notes feature
-│   │   ├── data/             # Data sources & models
-│   │   ├── domain/           # Entities & use cases
-│   │   └── presentation/     # UI & state
-│   ├── chat/                  # AI chat feature
-│   ├── search/                # Semantic search
-│   └── voice/                 # Voice input
-└── shared/                     # Shared widgets & providers
+├── core/                   # Global utilities (Theme, Constants, Errors)
+├── features/
+│   ├── notes/              # Main Feature
+│   │   ├── data/           # Hive Models, Repositories, Data Sources
+│   │   ├── domain/         # Entities & Abstract Repositories
+│   │   └── presentation/   # Screens (Editor, List), Providers, Widgets
+│   ├── chat/               # RAG Chat Interface
+│   └── search/             # Vector Search Logic
+└── main.dart               # App Entry & DI Setup
+
 ```
-
-### Key Architecture Decisions
-
-- **Local-First**: All data stored locally using SharedPreferences for instant access
-- **Optional Cloud Sync**: Supabase integration for cross-device synchronization
-- **Clean Separation**: Domain logic isolated from UI and data layers
-- **Testable**: Architecture enables comprehensive unit and integration testing
 
 ## 🚀 Getting Started
 
 ### Prerequisites
 
-- Flutter SDK 3.38.4 or higher
-- Dart SDK 3.10.3 or higher
-- Android Studio / VS Code with Flutter extensions
-- Git
+* Flutter SDK (`>=3.5.0`)
+* A Google Cloud API Key (for Gemini)
 
 ### Installation
 
 1. **Clone the repository**
-   ```bash
-   git clone https://github.com/Muhammad-Bilal-03/second_brain.git
-   cd second_brain
-   ```
+```bash
+git clone https://github.com/Muhammad-Bilal-03/second_brain.git
+cd second_brain
+
+```
+
 
 2. **Install dependencies**
-   ```bash
-   flutter pub get
-   ```
-
-3. **Run the app**
-   ```bash
-   flutter run
-   ```
-
-### Running Tests
-
 ```bash
-flutter test
+flutter pub get
+
 ```
 
-### Code Generation
 
-For Riverpod code generation:
+3. **Configure Environment**
+Create a `.env` file in the root directory and add your API key:
+```env
+GEMINI_API_KEY=your_api_key_here
 
-```bash
-dart run build_runner build --delete-conflicting-outputs
 ```
+
+
+4. **Run the app**
+```bash
+flutter run
+
+```
+
+
 
 ## 🗺️ Roadmap
 
-### Phase 1: Foundation (Notes CRUD) ✅ **Complete**
-- [x] Project setup with clean architecture
-- [x] Core dependencies and folder structure
-- [x] CI/CD with GitHub Actions
-- [x] Notes CRUD with SharedPreferences
-- [x] Material 3 UI with search & empty states
-- [x] Riverpod state management (AsyncNotifier pattern)
+* [x] **Phase 1: Core Foundation** (CRUD, Riverpod, Hive Migration)
+* [x] **Phase 2: Multi-Modal Input** (Code Editor, Voice Recorder, Checklists)
+* [x] **Phase 3: Intelligence** (Vector Embeddings, Semantic Search)
+* [x] **Phase 4: RAG Chatbot** (Full conversational interface with notes)
 
-### Phase 2: Intelligence Layer (Embeddings + Vector Search) ⬅️ **Next**
-- [ ] Text embedding generation
-- [ ] Vector similarity search
-- [ ] Semantic search UI
+## 🤝 Contributing
 
-### Phase 3: RAG Chat (LangChain.dart + Gemini)
-- [ ] LangChain.dart integration
-- [ ] Google Gemini API setup
-- [ ] RAG pipeline implementation
-- [ ] Chat UI with conversation history
-
-### Phase 4: Cloud Sync (Supabase + pgvector)
-- [ ] Supabase backend setup
-- [ ] pgvector for cloud embeddings
-- [ ] Sync engine implementation
-- [ ] Conflict resolution
-
-### Phase 5: Voice-to-Note
-- [ ] Speech-to-text integration
-- [ ] Voice recording UI
-- [ ] Real-time transcription
-
-### Phase 6: Polish & Ship
-- [ ] Performance optimization
-- [ ] Comprehensive testing
-- [ ] User documentation
-- [ ] App store deployment
+Contributions are welcome! Please fork the repository and submit a pull request.
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 👨‍💻 Author
-
-**Muhammad Bilal**
-- GitHub: <a href="https://github.com/Muhammad-Bilal-03">@Muhammad-Bilal-03</a>
-- LinkedIn: <a href="https://www.linkedin.com/in/muhammad-bilal-bsse/">muhammad-bilal-bsse</a>
+This project is licensed under the MIT License - see the [LICENSE]() file for details.
 
 ---
 
-*Built with ❤️ using Flutter*
+**Built by [Muhammad Bilal**]() *Empowering thoughts with AI.*
