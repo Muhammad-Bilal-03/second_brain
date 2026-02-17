@@ -14,8 +14,17 @@ class NotesRepositoryImpl implements NotesRepository {
   Future<List<Note>> getNotes() async {
     final noteModels = await localDataSource.getNotes();
     final notes = List<Note>.from(noteModels);
+    final Map<String, List<double>> savedEmbeddings = {};
 
-    // Sort: Pinned first, then Newest
+    for (var note in notes) {
+      if (note.embedding != null && note.embedding!.isNotEmpty) {
+        savedEmbeddings[note.id] = note.embedding!;
+      }
+    }
+    // Push saved vectors into the in-memory search engine
+    if (savedEmbeddings.isNotEmpty) {
+      vectorSearchService.hydrateEmbeddings(savedEmbeddings);
+    }
     notes.sort((a, b) {
       if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
       return b.updatedAt.compareTo(a.updatedAt);

@@ -43,13 +43,21 @@ class VectorSearchService {
 
     scored.sort((a, b) => b.value.compareTo(a.value));
 
-    // DEBUG: Print top score to help you tune
+    // ------------------------------------------------------------------
+    // 🔍 DEBUG: Print ALL scores to help you tune
+    // ------------------------------------------------------------------
     if (scored.isNotEmpty) {
-      print("🔍 Search: '$query' | Top Match Score: ${scored.first.value.toStringAsFixed(3)}");
+      print("🔍 Search: '$query'");
+      for (var i = 0; i < scored.length && i < 5; i++) {
+        print("   - Match #${i+1}: ${scored[i].value.toStringAsFixed(3)}");
+      }
     }
+    // ------------------------------------------------------------------
 
-    // 🔴 TUNING FIX: Set threshold to 0.589
-    // This allows "Apple" (0.597) but blocks "Horse" (0.543)
+    // 🔴 TUNING FIX: Set threshold to 0.56
+    // Groceries (0.607) -> PASS
+    // Papers (0.586)    -> PASS
+    // Test (approx 0.53)-> FAIL
     final filtered = scored
         .where((e) => e.value > 0.589)
         .take(topN)

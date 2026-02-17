@@ -99,28 +99,31 @@ class SemanticSearchToggleNotifier extends StateNotifier<bool> {
   void toggle(bool value) => state = value;
 }
 
-// --- Filtered Notes  ---
+// --- Filtered Notes (With Hybrid Search Fix) ---
 final filteredNotesProvider = FutureProvider<List<Note>>((ref) async {
-  // 1. Watch the AsyncValue directly (StateNotifierProvider doesn't have .future)
+  // 1. Watch the AsyncValue directly
   final notesAsync = ref.watch(notesProvider);
 
   final query = ref.watch(searchQueryProvider).toLowerCase();
   final isSemantic = ref.watch(semanticSearchToggleProvider);
   final repository = ref.watch(notesRepositoryProvider);
 
-  // 2. Safely unwrap the list. If loading/null, default to empty list to prevent crash.
+  // 2. Safely unwrap the list. If loading/null, default to empty list.
   final List<Note> notes = notesAsync.valueOrNull ?? [];
 
   if (query.isEmpty) return notes;
 
-  if (isSemantic) {
-    // 3. Handle async Semantic Search
+  // 3. Hybrid Search Logic
+  // Only use AI Semantic Search if the query is long enough (>= 3 chars).
+  // This filters out noise like "p", "bu", "ch".
+  if (isSemantic && query.length >= 3) {
     return await repository.semanticSearchNotes(query);
-  } else {
-    // 4. Handle Standard Search (safely, since 'notes' is guaranteed non-null)
-    return notes.where((note) {
-      return note.title.toLowerCase().contains(query) ||
-          note.content.toLowerCase().contains(query);
-    }).toList();
   }
+
+  // 4. Fallback to Standard Search (Exact text match)
+  // Used when Semantic Search is off OR when query is too short.
+  return notes.where((note) {
+    return note.title.toLowerCase().contains(query) ||
+        note.content.toLowerCase().contains(query);
+  }).toList();
 });
